@@ -127,6 +127,10 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
+
+      <p className="mt-8 text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+        © {new Date().getFullYear()} Álvaro Arriagada Ortega. Todos los derechos reservados.
+      </p>
     </div>
   )
 }

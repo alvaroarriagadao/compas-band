@@ -204,6 +204,10 @@ export default function HomePage() {
           ))}
         </div>
       )}
+
+      <p className="mt-10 text-xs text-center pb-4" style={{ color: 'var(--text-muted)' }}>
+        © {new Date().getFullYear()} Álvaro Arriagada Ortega. Todos los derechos reservados.
+      </p>
     </div>
   )
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, ChevronRight, LogOut, Users, Music2 } from 'lucide-react'
+import { Plus, ChevronRight, LogOut, Users, Music2, KeyRound, X, Eye, EyeOff } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { signOut, generateAccessCode, slugify } from '@/lib/auth'
 import { useAuth } from '@/contexts/AuthContext'
@@ -13,6 +13,13 @@ export default function HomePage() {
   const router = useRouter()
   const { user, loading } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
+  const [showChangePassword, setShowChangePassword] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPw, setShowPw] = useState(false)
+  const [pwError, setPwError] = useState('')
+  const [pwSuccess, setPwSuccess] = useState(false)
+  const [pwSaving, setPwSaving] = useState(false)
   const [fetching, setFetching] = useState(true)
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
@@ -76,6 +83,17 @@ export default function HomePage() {
     router.replace('/login')
   }
 
+  async function handleChangePassword() {
+    setPwError('')
+    if (newPassword.length < 6) { setPwError('Mínimo 6 caracteres'); return }
+    if (newPassword !== confirmPassword) { setPwError('Las contraseñas no coinciden'); return }
+    setPwSaving(true)
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) setPwError(error.message)
+    else { setPwSuccess(true); setTimeout(() => { setShowChangePassword(false); setPwSuccess(false); setNewPassword(''); setConfirmPassword('') }, 1800) }
+    setPwSaving(false)
+  }
+
   if (loading || (!user && !loading)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -99,13 +117,18 @@ export default function HomePage() {
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{user?.email}</p>
           </div>
         </div>
-        <button onClick={handleSignOut} className="p-2.5 rounded-xl transition-colors" style={{ color: 'var(--text-muted)' }}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
-          title="Cerrar sesión"
-        >
-          <LogOut size={16} />
-        </button>
+        <div className="flex gap-1">
+          <button onClick={() => setShowChangePassword(true)} className="p-2.5 rounded-xl transition-colors" style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
+            title="Cambiar contraseña"
+          ><KeyRound size={15} /></button>
+          <button onClick={handleSignOut} className="p-2.5 rounded-xl transition-colors" style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
+            title="Cerrar sesión"
+          ><LogOut size={15} /></button>
+        </div>
       </div>
 
       {/* New project */}
@@ -208,6 +231,77 @@ export default function HomePage() {
       <p className="mt-10 text-xs text-center pb-4" style={{ color: 'var(--text-muted)' }}>
         © {new Date().getFullYear()} Álvaro Arriagada Ortega. Todos los derechos reservados.
       </p>
+
+      {/* Change password modal */}
+      {showChangePassword && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+          onClick={e => { if (e.target === e.currentTarget) { setShowChangePassword(false); setPwError('') } }}
+        >
+          <div className="w-full max-w-sm rounded-3xl p-6 fade-in" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-bright)' }}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="font-bold" style={{ color: 'var(--text-primary)' }}>Cambiar contraseña</h2>
+              <button onClick={() => { setShowChangePassword(false); setPwError('') }} style={{ color: 'var(--text-muted)' }}><X size={18} /></button>
+            </div>
+
+            {pwSuccess ? (
+              <div className="text-center py-4">
+                <div className="text-4xl mb-2">✅</div>
+                <p className="font-semibold" style={{ color: 'var(--green)' }}>Contraseña actualizada</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--text-muted)' }}>Nueva contraseña</label>
+                  <div className="relative">
+                    <input
+                      type={showPw ? 'text' : 'password'}
+                      minLength={6}
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      placeholder="Mínimo 6 caracteres"
+                      className="w-full px-4 py-3 rounded-xl text-sm outline-none pr-11"
+                      style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                      onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'}
+                      onBlur={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'}
+                    />
+                    <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }}>
+                      {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--text-muted)' }}>Confirmar contraseña</label>
+                  <input
+                    type={showPw ? 'text' : 'password'}
+                    minLength={6}
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleChangePassword() }}
+                    placeholder="Repite la contraseña"
+                    className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                    onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'}
+                    onBlur={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'}
+                  />
+                </div>
+                {pwError && (
+                  <p className="text-xs" style={{ color: 'var(--red)' }}>{pwError}</p>
+                )}
+                <button
+                  onClick={handleChangePassword}
+                  disabled={pwSaving || !newPassword || !confirmPassword}
+                  className="w-full py-3 rounded-xl text-sm font-bold mt-1"
+                  style={{ background: 'var(--accent)', color: '#000', opacity: (pwSaving || !newPassword || !confirmPassword) ? 0.5 : 1 }}
+                >
+                  {pwSaving ? 'Guardando...' : 'Cambiar contraseña'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

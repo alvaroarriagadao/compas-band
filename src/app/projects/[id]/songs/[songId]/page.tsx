@@ -253,15 +253,15 @@ export default function SongPage() {
                   className="w-full px-4 py-4 rounded-2xl text-sm outline-none resize-none font-mono leading-loose"
                   spellCheck={false}
                   autoCorrect="off"
-                  autoCapitalize="off"
+                  autoCapitalize="none"
+                  autoComplete="off"
+                  data-gramm="false"
                   style={{
                     background: 'var(--bg-card)',
                     border: '1px solid var(--border)',
                     color: 'var(--text-primary)',
                     caretColor: 'var(--accent)',
-                    whiteSpace: 'pre',
-                    overflowWrap: 'normal',
-                    overflowX: 'auto',
+                    whiteSpace: 'pre-wrap',
                   }}
                   onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-bright)'}
                   onBlur={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'}

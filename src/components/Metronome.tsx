@@ -18,11 +18,11 @@ const SOUNDS: { id: ClickSound; label: string; emoji: string; desc: string }[] =
   { id: 'soft', label: 'Hi-hat', emoji: '🥁', desc: 'Suave' },
 ]
 
-const SUBDIVISIONS: { value: Subdivision; label: string; symbol: string; desc: string }[] = [
-  { value: 1, label: '♩', symbol: 'Negras', desc: '1 por tiempo' },
-  { value: 2, label: '♪♪', symbol: 'Corcheas', desc: '2 por tiempo' },
-  { value: 3, label: '♪♪♪', symbol: 'Tresillos', desc: '3 por tiempo' },
-  { value: 4, label: '♬', symbol: 'Semicorcheas', desc: '4 por tiempo' },
+const SUBDIVISIONS: { value: Subdivision; symbol: string; mult: string }[] = [
+  { value: 1, symbol: '♩', mult: '×1' },
+  { value: 2, symbol: '♪', mult: '×2' },
+  { value: 3, symbol: '♪', mult: '×3' },
+  { value: 4, symbol: '♬', mult: '×4' },
 ]
 
 export function Metronome({ songId, songTitle, initialBpm, onBpmChange, compact = false }: MetronomeProps) {
@@ -219,15 +219,15 @@ export function Metronome({ songId, songTitle, initialBpm, onBpmChange, compact 
               <button
                 key={s.value}
                 onClick={() => setSubdivision(s.value)}
-                className="py-2.5 rounded-xl flex flex-col items-center gap-0.5 transition-all"
+                className="py-2 rounded-xl flex flex-col items-center gap-0.5 transition-all"
                 style={{
                   background: subdivision === s.value ? 'rgba(245,158,11,0.12)' : 'var(--bg-elevated)',
                   border: `1px solid ${subdivision === s.value ? 'rgba(245,158,11,0.5)' : 'var(--border)'}`,
                   color: subdivision === s.value ? 'var(--accent)' : 'var(--text-muted)',
                 }}
               >
-                <span className="text-base leading-none">{s.label}</span>
-                <span className="text-xs leading-none opacity-70">{s.symbol}</span>
+                <span style={{ fontSize: 18, lineHeight: 1 }}>{s.symbol}</span>
+                <span style={{ fontSize: 10, lineHeight: 1.4, fontWeight: 700 }}>{s.mult}</span>
               </button>
             ))}
           </div>

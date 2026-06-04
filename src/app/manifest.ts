@@ -2,19 +2,43 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'BandUtils',
-    short_name: 'BandUtils',
-    description: 'Letras, acordes, BPM y metrónomo para tu banda',
+    name: 'Compás',
+    short_name: 'Compás',
+    description: 'El ritmo de tu banda — setlists, letras, acordes y metrónomo',
     start_url: '/',
+    scope: '/',
     display: 'standalone',
     background_color: '#07070f',
     theme_color: '#f59e0b',
     orientation: 'portrait-primary',
     categories: ['music', 'utilities'],
+    lang: 'es',
     icons: [
-      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      {
+        src: '/icon-192',
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icon',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icon',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+    ],
+    shortcuts: [
+      {
+        name: 'Mis proyectos',
+        url: '/',
+        description: 'Ver todos los proyectos',
+      },
     ],
   }
 }

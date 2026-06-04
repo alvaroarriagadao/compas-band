@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Save, Edit3, Info, ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowLeft, Save, Edit3, Info, ChevronDown, ChevronUp, BookOpen } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Project, Song } from '@/lib/database.types'
 import { Metronome } from '@/components/Metronome'
@@ -173,6 +173,14 @@ export default function SongPage() {
           )}
           {saving && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Guardando…</span>}
           {!dirty && !saving && !bpmPendingSave && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>✓</span>}
+          <Link
+            href={`/projects/${id}/songs/${songId}/read`}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
+            style={{ background: 'rgba(167,139,250,0.12)', color: '#a78bfa' }}
+            title="Modo lectura"
+          >
+            <BookOpen size={12} /> Leer
+          </Link>
         </div>
       </div>
 
@@ -240,14 +248,20 @@ export default function SongPage() {
                   ref={textareaRef}
                   value={lyrics}
                   onChange={e => { setLyrics(e.target.value); setDirty(true) }}
-                  placeholder={`Escribe la letra aquí...\n\nEjemplo:\n[Am]Hola [G]mundo\n[C]Esta es la [Em]letra\n\nDeja líneas vacías entre estrofas`}
+                  placeholder={'Escribe la letra aquí...\n\nEjemplo:\n[Am]Hola [G]mundo\n[C]Esta es la [Em]letra\n\nDeja líneas vacías entre estrofas'}
                   rows={16}
                   className="w-full px-4 py-4 rounded-2xl text-sm outline-none resize-none font-mono leading-loose"
+                  spellCheck={false}
+                  autoCorrect="off"
+                  autoCapitalize="off"
                   style={{
                     background: 'var(--bg-card)',
                     border: '1px solid var(--border)',
                     color: 'var(--text-primary)',
                     caretColor: 'var(--accent)',
+                    whiteSpace: 'pre',
+                    overflowWrap: 'normal',
+                    overflowX: 'auto',
                   }}
                   onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-bright)'}
                   onBlur={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'}

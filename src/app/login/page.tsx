@@ -1,12 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn, signUp } from '@/lib/auth'
 import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const joinCode = searchParams.get('join')
   const { user, loading } = useAuth()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
@@ -16,25 +19,48 @@ export default function LoginPage() {
   const [emailSent, setEmailSent] = useState(false)
 
   useEffect(() => {
-    if (!loading && user) router.replace('/')
-  }, [user, loading, router])
+    if (!loading && user) {
+      if (joinCode) handleJoinAfterAuth(user.id, joinCode)
+      else router.replace('/')
+    }
+  }, [user, loading]) // eslint-disable-line
+
+  async function handleJoinAfterAuth(userId: string, code: string) {
+    const { data: project } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('access_code', code.toUpperCase())
+      .single()
+
+    if (project) {
+      await supabase.from('project_members').upsert({
+        project_id: project.id,
+        user_id: userId,
+        role: 'member',
+      })
+      router.replace(`/projects/${project.id}`)
+    } else {
+      router.replace('/')
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(''); setSubmitting(true)
 
     if (mode === 'login') {
-      const { error } = await signIn(email, password)
+      const { data, error } = await signIn(email, password)
       if (error) {
         setError(
           error.message.includes('Invalid login credentials')
             ? 'Email o contraseña incorrectos'
             : error.message.includes('Email not confirmed')
-            ? 'Debes confirmar tu email antes. Revisa tu bandeja de entrada.'
+            ? 'Debes confirmar tu email primero. Revisa tu bandeja de entrada.'
             : error.message
         )
-      } else {
-        router.replace('/')
+      } else if (data.session) {
+        if (joinCode) await handleJoinAfterAuth(data.session.user.id, joinCode)
+        else router.replace('/')
       }
     } else {
       const { data, error } = await signUp(email, password)
@@ -42,7 +68,8 @@ export default function LoginPage() {
         setError(error.message)
       } else if (data.session) {
         // Email confirmation disabled — logged in directly
-        router.replace('/')
+        if (joinCode) await handleJoinAfterAuth(data.session.user.id, joinCode)
+        else router.replace('/')
       } else {
         // Email confirmation enabled — show message
         setEmailSent(true)
@@ -182,5 +209,17 @@ export default function LoginPage() {
         © {new Date().getFullYear()} Álvaro Arriagada Ortega. Todos los derechos reservados.
       </p>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
+        <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }} />
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   )
 }

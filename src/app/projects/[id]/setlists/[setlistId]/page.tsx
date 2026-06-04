@@ -12,7 +12,7 @@ import {
   useSortable, verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ArrowLeft, Plus, GripVertical, X, Trash2, Play, Square, Calendar, MapPin } from 'lucide-react'
+import { ArrowLeft, Plus, GripVertical, X, Play, Square, Calendar, MapPin, BookOpen } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Song, Setlist, SetlistSong } from '@/lib/database.types'
 import { useMetronomeStore } from '@/stores/metronomeStore'
@@ -69,6 +69,16 @@ function SortableSetlistSong({ item, index, onRemove }: {
 
         {/* Actions */}
         <div className="flex items-center gap-1 flex-shrink-0">
+          {song?.lyrics && (
+            <Link
+              href={`/projects/${song.project_id}/songs/${song.id}/read?from=${item.setlist_id}`}
+              className="w-9 h-9 rounded-xl flex items-center justify-center transition-all"
+              style={{ background: 'rgba(167,139,250,0.15)', color: '#a78bfa' }}
+              title="Leer letra"
+            >
+              <BookOpen size={14} />
+            </Link>
+          )}
           {song && (
             <button
               onClick={() => toggle({ songId: song.id, songTitle: song.title, bpm: song.bpm })}

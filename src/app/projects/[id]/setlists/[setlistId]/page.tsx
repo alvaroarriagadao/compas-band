@@ -91,11 +91,11 @@ function SortableSetlistSong({ item, index, onRemove }: {
               {isThisPlaying ? <Square size={12} color="#fff" /> : <Play size={12} color="#fff" fill="white" />}
             </button>
           )}
-          <button onClick={() => onRemove(item.id)}
-            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-            style={{ color: 'var(--text-muted)' }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--red)'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
+          <button
+            onClick={() => onRemove(item.id)}
+            className="w-8 h-8 rounded-xl flex items-center justify-center"
+            style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--red)' }}
+            title="Quitar del setlist"
           ><X size={13} /></button>
         </div>
       </div>

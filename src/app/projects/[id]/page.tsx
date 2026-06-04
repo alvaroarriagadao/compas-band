@@ -84,22 +84,19 @@ function SortableSong({ song, index, onDelete, onEdit }: {
           </p>
         </Link>
 
-        {/* Actions */}
+        {/* Actions — always visible */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          <Link href={`/projects/${song.project_id}/songs/${song.id}`}
-            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hidden sm:flex"
-            style={{ color: 'var(--text-muted)' }}><ChevronRight size={13} /></Link>
-          <button onClick={e => { e.stopPropagation(); onEdit(song.id) }}
-            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-            style={{ color: 'var(--text-muted)' }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
+          <button
+            onClick={e => { e.stopPropagation(); onEdit(song.id) }}
+            className="w-8 h-8 rounded-xl flex items-center justify-center"
+            style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}
+            title="Editar"
           ><Edit2 size={13} /></button>
-          <button onClick={e => { e.stopPropagation(); onDelete(song.id) }}
-            className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-            style={{ color: 'var(--text-muted)' }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--red)'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
+          <button
+            onClick={e => { e.stopPropagation(); if (window.confirm(`¿Eliminar "${song.title}"?`)) onDelete(song.id) }}
+            className="w-8 h-8 rounded-xl flex items-center justify-center"
+            style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--red)' }}
+            title="Eliminar"
           ><Trash2 size={13} /></button>
           <MetronomePlayButton songId={song.id} songTitle={song.title} bpm={song.bpm} />
         </div>
@@ -473,13 +470,11 @@ export default function ProjectPage() {
                         {sl.venue && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>📍 {sl.venue}</span>}
                       </div>
                     </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={e => { e.preventDefault(); deleteSetlist(sl.id) }}
-                        className="p-1.5 rounded-lg" style={{ color: 'var(--text-muted)' }}
-                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--red)'}
-                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
-                      ><Trash2 size={13} /></button>
-                    </div>
+                    <button
+                      onClick={e => { e.preventDefault(); deleteSetlist(sl.id) }}
+                      className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--red)' }}
+                    ><Trash2 size={13} /></button>
                     <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                   </Link>
                 ))}

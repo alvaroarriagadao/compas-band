@@ -146,18 +146,18 @@ export default function CalendarPage() {
     setShowAdd(false); setSaving(false)
   }
 
-  async function deleteGig(id: string) {
+  function confirmDelete(id: string, title: string) {
+    if (!window.confirm(`¿Eliminar "${title}"?\nEsta acción no se puede deshacer.`)) return
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('gig_dates').delete().eq('id', id)
+    ;(supabase as any).from('gig_dates').delete().eq('id', id)
     setGigs(gs => gs.filter(g => g.id !== id))
   }
 
-  async function cycleStatus(g: GigDate) {
-    const order: GigStatus[] = ['tentative', 'confirmed', 'cancelled']
-    const next = order[(order.indexOf(g.status) + 1) % order.length]
+  async function setGigStatus(g: GigDate, status: GigStatus) {
+    if (g.status === status) return
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('gig_dates').update({ status: next }).eq('id', g.id)
-    setGigs(gs => gs.map(x => x.id === g.id ? { ...x, status: next } : x))
+    await (supabase as any).from('gig_dates').update({ status }).eq('id', g.id)
+    setGigs(gs => gs.map(x => x.id === g.id ? { ...x, status } : x))
   }
 
   const todayStr = today()
@@ -285,48 +285,69 @@ export default function CalendarPage() {
               {selectedGigs.map(g => (
                 <div
                   key={g.id}
-                  className="group rounded-2xl p-4"
-                  style={{ background: STATUS[g.status].bg, border: `1px solid ${STATUS[g.status].color}33` }}
+                  className="rounded-2xl overflow-hidden"
+                  style={{ background: 'var(--bg-card)', border: `1px solid ${STATUS[g.status].color}40` }}
                 >
-                  <div className="flex items-start gap-3">
-                    {/* Status dot — click to cycle */}
-                    <button
-                      onClick={() => cycleStatus(g)}
-                      className="mt-0.5 w-4 h-4 rounded-full flex-shrink-0 transition-all hover:scale-125"
-                      style={{ background: STATUS[g.status].dot, boxShadow: `0 0 8px ${STATUS[g.status].dot}60` }}
-                      title={`${STATUS[g.status].label} — clic para cambiar`}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{g.title}</p>
-                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                        <span className="text-xs font-semibold" style={{ color: STATUS[g.status].color }}>
-                          {STATUS[g.status].label}
-                        </span>
-                        {g.venue && (
-                          <span className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-                            <MapPin size={10} /> {g.venue}
-                          </span>
-                        )}
-                        {g.project && (
-                          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                            🎵 {(g.project as { name: string }).name}
-                          </span>
-                        )}
+                  {/* Event body */}
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-bold flex-1" style={{ color: 'var(--text-primary)' }}>{g.title}</p>
+                      {/* Actions — always visible */}
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => openEdit(g)}
+                          className="w-8 h-8 rounded-xl flex items-center justify-center"
+                          style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}
+                        ><Edit2 size={13} /></button>
+                        <button
+                          onClick={() => confirmDelete(g.id, g.title)}
+                          className="w-8 h-8 rounded-xl flex items-center justify-center"
+                          style={{ background: 'rgba(239,68,68,0.12)', color: 'var(--red)' }}
+                        ><Trash2 size={13} /></button>
                       </div>
-                      {g.notes && (
-                        <p className="text-xs mt-1.5" style={{ color: 'var(--text-secondary)' }}>{g.notes}</p>
+                    </div>
+
+                    {/* Meta */}
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+                      {g.venue && (
+                        <span className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                          <MapPin size={10} /> {g.venue}
+                        </span>
+                      )}
+                      {g.project && (
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          🎵 {(g.project as { name: string }).name}
+                        </span>
                       )}
                     </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                      <button onClick={() => openEdit(g)} className="p-1.5 rounded-lg" style={{ color: 'var(--text-muted)' }}
-                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'}
-                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
-                      ><Edit2 size={13} /></button>
-                      <button onClick={() => deleteGig(g.id)} className="p-1.5 rounded-lg" style={{ color: 'var(--text-muted)' }}
-                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--red)'}
-                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
-                      ><Trash2 size={13} /></button>
-                    </div>
+                    {g.notes && (
+                      <p className="text-xs mt-2" style={{ color: 'var(--text-secondary)' }}>{g.notes}</p>
+                    )}
+                  </div>
+
+                  {/* Status bar — 3 tappable pills, always visible */}
+                  <div
+                    className="flex border-t"
+                    style={{ borderColor: `${STATUS[g.status].color}25` }}
+                  >
+                    {(Object.entries(STATUS) as [GigStatus, typeof STATUS[GigStatus]][]).map(([k, v]) => {
+                      const isActive = g.status === k
+                      return (
+                        <button
+                          key={k}
+                          onClick={() => setGigStatus(g, k)}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold transition-all"
+                          style={{
+                            background: isActive ? v.bg : 'transparent',
+                            color: isActive ? v.color : 'var(--text-muted)',
+                            borderRight: k !== 'cancelled' ? `1px solid ${STATUS[g.status].color}20` : 'none',
+                          }}
+                        >
+                          <span>{v.emoji}</span>
+                          <span className="hidden sm:inline">{v.label}</span>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               ))}

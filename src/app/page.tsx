@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, ChevronRight, LogOut, Users, Music2, KeyRound, X, Eye, EyeOff } from 'lucide-react'
+import { PWAInstallButton } from '@/components/PWAInstall'
 import { supabase } from '@/lib/supabase'
 import { signOut, generateAccessCode, slugify } from '@/lib/auth'
 import { useAuth } from '@/contexts/AuthContext'
@@ -117,7 +118,8 @@ export default function HomePage() {
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{user?.email}</p>
           </div>
         </div>
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1.5">
+          <PWAInstallButton />
           <button onClick={() => setShowChangePassword(true)} className="p-2.5 rounded-xl transition-colors" style={{ color: 'var(--text-muted)' }}
             onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}

@@ -64,47 +64,38 @@ export function PWAInstallBanner() {
 
   return (
     <>
+      {/* Simple full-width top banner */}
       <div
-        className="fixed left-0 right-0 z-50 mx-auto px-3 fade-in"
+        className="fixed top-0 left-0 right-0 z-50 flex items-center gap-3 px-4 fade-in"
         style={{
-          top: 'max(8px, env(safe-area-inset-top))',
-          maxWidth: 480,
-          left: '50%',
-          transform: 'translateX(-50%)',
+          paddingTop: 'max(10px, env(safe-area-inset-top))',
+          paddingBottom: 10,
+          background: 'rgba(10,10,18,0.97)',
+          borderBottom: '1px solid rgba(245,158,11,0.25)',
+          backdropFilter: 'blur(12px)',
         }}
       >
-        <div
-          className="flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl"
-          style={{
-            background: 'linear-gradient(135deg, #1c1200, #0f0a00)',
-            border: '1px solid rgba(245,158,11,0.4)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-          }}
-        >
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'var(--accent)', boxShadow: '0 0 12px rgba(245,158,11,0.4)' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="#000"><path d="M9 3v11.55A4 4 0 1 0 11 18V7h6V3H9z"/></svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold leading-none mb-0.5" style={{ color: 'var(--accent)' }}>
-              Instala Compás
-            </p>
-            <p className="text-xs leading-tight" style={{ color: 'var(--text-muted)' }}>
-              {isIOS ? 'Agrégala a tu pantalla de inicio' : 'Acceso rápido sin abrir el navegador'}
-            </p>
-          </div>
-          <button
-            onClick={isIOS ? () => setShowGuide(true) : install}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold flex-shrink-0 transition-all"
-            style={{ background: 'var(--accent)', color: '#000' }}
-          >
-            <Download size={12} />
-            {isIOS ? 'Cómo' : 'Instalar'}
-          </button>
-          <button onClick={dismiss} className="p-1 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
-            <X size={15} />
-          </button>
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ background: 'var(--accent)' }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#000"><path d="M9 3v11.55A4 4 0 1 0 11 18V7h6V3H9z"/></svg>
         </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+            <span className="font-bold" style={{ color: 'var(--accent)' }}>Compás </span>
+            {isIOS ? '— agrégala a tu inicio' : '— instala para acceso rápido'}
+          </p>
+        </div>
+        <button
+          onClick={isIOS ? () => setShowGuide(true) : install}
+          className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold flex-shrink-0"
+          style={{ background: 'var(--accent)', color: '#000' }}
+        >
+          <Download size={11} />
+          {isIOS ? 'Ver cómo' : 'Instalar'}
+        </button>
+        <button onClick={dismiss} className="p-1 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+          <X size={15} />
+        </button>
       </div>
 
       {/* iOS guide */}
@@ -205,17 +196,8 @@ export function PWAInstallButton() {
     setPrompt(null)
   }
 
-  if (isInstalled) {
-    return (
-      <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-        style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--green)', border: '1px solid rgba(16,185,129,0.2)' }}>
-        <Smartphone size={13} />
-        {justInstalled ? '¡App instalada! 🎉' : 'App instalada'}
-      </div>
-    )
-  }
-
-  if (!prompt && !isIOS) return null
+  // Already installed or nothing to show → render nothing
+  if (isInstalled || (!prompt && !isIOS)) return null
 
   return (
     <>

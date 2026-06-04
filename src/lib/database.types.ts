@@ -6,6 +6,10 @@ export interface Database {
           id: string
           name: string
           description: string | null
+          slug: string | null
+          logo_url: string | null
+          access_code: string | null
+          owner_id: string | null
           created_at: string
           updated_at: string
         }
@@ -13,13 +17,20 @@ export interface Database {
           id?: string
           name: string
           description?: string | null
+          slug?: string | null
+          logo_url?: string | null
+          access_code?: string | null
+          owner_id?: string | null
           created_at?: string
           updated_at?: string
         }
         Update: {
-          id?: string
           name?: string
           description?: string | null
+          slug?: string | null
+          logo_url?: string | null
+          access_code?: string | null
+          owner_id?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -44,18 +55,13 @@ export interface Database {
           song_order?: number
           lyrics?: string
           notes?: string
-          created_at?: string
-          updated_at?: string
         }
         Update: {
-          id?: string
-          project_id?: string
           title?: string
           bpm?: number
           song_order?: number
           lyrics?: string
           notes?: string
-          updated_at?: string
         }
         Relationships: [
           {
@@ -67,6 +73,74 @@ export interface Database {
           }
         ]
       }
+      project_members: {
+        Row: {
+          project_id: string
+          user_id: string
+          role: string
+          joined_at: string
+        }
+        Insert: {
+          project_id: string
+          user_id: string
+          role?: string
+        }
+        Update: { role?: string }
+        Relationships: []
+      }
+      setlists: {
+        Row: {
+          id: string
+          project_id: string
+          name: string
+          event_date: string | null
+          venue: string | null
+          notes: string | null
+          setlist_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          name: string
+          event_date?: string | null
+          venue?: string | null
+          notes?: string | null
+          setlist_order?: number
+        }
+        Update: {
+          name?: string
+          event_date?: string | null
+          venue?: string | null
+          notes?: string | null
+          setlist_order?: number
+        }
+        Relationships: []
+      }
+      setlist_songs: {
+        Row: {
+          id: string
+          setlist_id: string
+          song_id: string | null
+          custom_title: string | null
+          song_order: number
+          notes: string | null
+        }
+        Insert: {
+          id?: string
+          setlist_id: string
+          song_id?: string | null
+          custom_title?: string | null
+          song_order?: number
+          notes?: string | null
+        }
+        Update: {
+          song_order?: number
+          notes?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -77,3 +151,5 @@ export interface Database {
 
 export type Project = Database['public']['Tables']['projects']['Row']
 export type Song = Database['public']['Tables']['songs']['Row']
+export type Setlist = Database['public']['Tables']['setlists']['Row']
+export type SetlistSong = Database['public']['Tables']['setlist_songs']['Row']

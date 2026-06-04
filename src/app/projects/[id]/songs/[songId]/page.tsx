@@ -34,6 +34,7 @@ export default function SongPage() {
   const [title, setTitle] = useState('')
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [bpmPendingSave, setBpmPendingSave] = useState(false)
   const [lyricsMode, setLyricsMode] = useState<LyricsMode>('view')
   const [showHelp, setShowHelp] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
@@ -63,12 +64,27 @@ export default function SongPage() {
     setLoading(false)
   }
 
+  // Auto-save ONLY lyrics and notes — NOT bpm (multi-user safety)
   useEffect(() => {
     if (!dirty || !song) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(saveAll, 1500)
+    saveTimerRef.current = setTimeout(saveLyricsNotes, 1800)
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
-  }, [lyrics, notes, bpm, title, dirty]) // eslint-disable-line
+  }, [lyrics, notes, title, dirty]) // eslint-disable-line
+
+  async function saveLyricsNotes() {
+    if (!song) return
+    setSaving(true)
+    await supabase.from('songs').update({ lyrics, notes, title }).eq('id', song.id)
+    setSaving(false)
+    setDirty(false)
+  }
+
+  async function saveBpm() {
+    if (!song) return
+    await supabase.from('songs').update({ bpm }).eq('id', song.id)
+    setBpmPendingSave(false)
+  }
 
   async function saveAll() {
     if (!song) return
@@ -76,12 +92,13 @@ export default function SongPage() {
     await supabase.from('songs').update({ lyrics, notes, bpm, title }).eq('id', song.id)
     setSaving(false)
     setDirty(false)
+    setBpmPendingSave(false)
   }
 
   function handleBpmChange(val: number) {
     setBpm(val)
     setStoreBpm(val)
-    setDirty(true)
+    setBpmPendingSave(true) // BPM needs manual save
   }
 
   function insertChord(chord: string) {
@@ -147,15 +164,15 @@ export default function SongPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          {dirty && !saving && (
+          {(dirty || bpmPendingSave) && !saving && (
             <button onClick={saveAll}
               className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold"
-              style={{ background: 'var(--accent)', color: '#000' }}>
-              <Save size={11} /> Guardar
+              style={{ background: bpmPendingSave ? 'var(--red)' : 'var(--accent)', color: '#000' }}>
+              <Save size={11} /> {bpmPendingSave ? 'Guardar BPM' : 'Guardar'}
             </button>
           )}
           {saving && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Guardando…</span>}
-          {!dirty && !saving && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>✓</span>}
+          {!dirty && !saving && !bpmPendingSave && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>✓</span>}
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Play, Square, Volume2 } from 'lucide-react'
 import { useMetronomeStore, type ClickSound, type Subdivision } from '@/stores/metronomeStore'
 
@@ -32,21 +32,43 @@ export function Metronome({ songId, songTitle, initialBpm, onBpmChange, compact 
     subdivision, setSubdivision, playingSongId, start, stop, toggle,
   } = useMetronomeStore()
 
+  // Local input state so typing isn't interrupted by store updates
+  const [bpmInput, setBpmInput] = useState(String(initialBpm ?? bpm))
+
   const isThisSongPlaying = isPlaying && (!songId || playingSongId === songId)
 
   useEffect(() => {
     if (initialBpm !== undefined && !isPlaying) {
       setBpm(initialBpm)
+      setBpmInput(String(initialBpm))
     }
   }, [initialBpm]) // eslint-disable-line
 
   function handleBpmChange(val: number) {
-    setBpm(val)
-    onBpmChange?.(val)
-    // If playing this song, restart with new BPM
+    const clamped = Math.min(240, Math.max(40, val))
+    setBpm(clamped)
+    setBpmInput(String(clamped))
+    onBpmChange?.(clamped)
     if (isThisSongPlaying && songId) {
-      start({ songId, songTitle, bpm: val })
+      start({ songId, songTitle, bpm: clamped })
     }
+  }
+
+  function handleBpmInput(raw: string) {
+    setBpmInput(raw)
+    const n = parseInt(raw)
+    if (!isNaN(n) && n >= 40 && n <= 240) {
+      setBpm(n)
+      onBpmChange?.(n)
+    }
+  }
+
+  function commitBpmInput() {
+    const n = parseInt(bpmInput)
+    const clamped = isNaN(n) ? bpm : Math.min(240, Math.max(40, n))
+    setBpm(clamped)
+    setBpmInput(String(clamped))
+    onBpmChange?.(clamped)
   }
 
   function handleToggle() {
@@ -156,8 +178,10 @@ export function Metronome({ songId, songTitle, initialBpm, onBpmChange, compact 
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'}
             >−</button>
             <input
-              type="number" min={40} max={240} value={bpm}
-              onChange={e => handleBpmChange(Math.min(240, Math.max(40, Number(e.target.value))))}
+              type="text" inputMode="numeric" value={bpmInput}
+              onChange={e => handleBpmInput(e.target.value)}
+              onBlur={commitBpmInput}
+              onKeyDown={e => { if (e.key === 'Enter') commitBpmInput() }}
               className="flex-1 text-center font-bold text-lg rounded-xl outline-none py-1.5"
               style={{ background: 'var(--bg-elevated)', color: 'var(--accent)', border: '1px solid var(--border)' }}
             />

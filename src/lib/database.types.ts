@@ -44,6 +44,11 @@ export interface Database {
           song_order: number
           lyrics: string
           notes: string
+          metro_sound: string
+          metro_subdivision: number
+          metro_volume: number
+          metro_beats: number
+          metro_accent: boolean
           created_at: string
           updated_at: string
         }
@@ -55,6 +60,11 @@ export interface Database {
           song_order?: number
           lyrics?: string
           notes?: string
+          metro_sound?: string
+          metro_subdivision?: number
+          metro_volume?: number
+          metro_beats?: number
+          metro_accent?: boolean
         }
         Update: {
           title?: string
@@ -62,6 +72,11 @@ export interface Database {
           song_order?: number
           lyrics?: string
           notes?: string
+          metro_sound?: string
+          metro_subdivision?: number
+          metro_volume?: number
+          metro_beats?: number
+          metro_accent?: boolean
         }
         Relationships: [
           {

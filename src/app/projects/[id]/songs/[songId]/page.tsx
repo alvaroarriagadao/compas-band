@@ -42,7 +42,16 @@ export default function SongPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const { setBpm: setStoreBpm } = useMetronomeStore()
+  const {
+    setBpm: setStoreBpm,
+    setSound, setSubdivision, setVolume, setBeatsPerMeasure, setAccentDownbeat,
+    sound, subdivision, volume, beatsPerMeasure, accentDownbeat,
+    isPlaying,
+  } = useMetronomeStore()
+
+  // Track if metro config changed so we can save it
+  const metroSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const metroConfigLoaded = useRef(false)
 
   useEffect(() => { loadData() }, [songId]) // eslint-disable-line
 
@@ -58,10 +67,36 @@ export default function SongPage() {
       setNotes(songRes.data.notes || '')
       setBpm(songRes.data.bpm)
       setTitle(songRes.data.title)
-      // Sync store BPM when entering song
+      // Load saved metronome config into the global store
       setStoreBpm(songRes.data.bpm)
+      setSound((songRes.data.metro_sound as 'classic' | 'wood' | 'soft') || 'classic')
+      setSubdivision((songRes.data.metro_subdivision as 1 | 2 | 3 | 4) || 1)
+      setVolume(songRes.data.metro_volume ?? 1.0)
+      setBeatsPerMeasure(songRes.data.metro_beats ?? 4)
+      setAccentDownbeat(songRes.data.metro_accent ?? true)
+      // Small delay so first change detection doesn't trigger immediately
+      setTimeout(() => { metroConfigLoaded.current = true }, 300)
     }
     setLoading(false)
+  }
+
+  // Auto-save metro config when it changes (debounced 2s)
+  useEffect(() => {
+    if (!metroConfigLoaded.current || !song) return
+    if (metroSaveTimer.current) clearTimeout(metroSaveTimer.current)
+    metroSaveTimer.current = setTimeout(saveMetroConfig, 2000)
+    return () => { if (metroSaveTimer.current) clearTimeout(metroSaveTimer.current) }
+  }, [sound, subdivision, volume, beatsPerMeasure, accentDownbeat]) // eslint-disable-line
+
+  async function saveMetroConfig() {
+    if (!song) return
+    await supabase.from('songs').update({
+      metro_sound: sound,
+      metro_subdivision: subdivision,
+      metro_volume: volume,
+      metro_beats: beatsPerMeasure,
+      metro_accent: accentDownbeat,
+    }).eq('id', song.id)
   }
 
   // Auto-save ONLY lyrics and notes — NOT bpm (multi-user safety)

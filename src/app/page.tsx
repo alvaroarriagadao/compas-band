@@ -14,6 +14,7 @@ export default function HomePage() {
   const router = useRouter()
   const { user, loading } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
+  const [visibleCodes, setVisibleCodes] = useState<Set<string>>(new Set())
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -214,9 +215,29 @@ export default function HomePage() {
                 <p className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{project.name}</p>
                 {project.description && <p className="text-xs truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>{project.description}</p>}
                 {project.access_code && (
-                  <p className="text-xs mt-1 font-mono font-bold" style={{ color: 'var(--text-muted)' }}>
-                    Código: <span style={{ color: 'var(--accent)' }}>{project.access_code}</span>
-                  </p>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-xs font-mono font-bold" style={{ color: 'var(--text-muted)' }}>
+                      Código:{' '}
+                      <span style={{ color: visibleCodes.has(project.id) ? 'var(--accent)' : 'var(--text-muted)', letterSpacing: visibleCodes.has(project.id) ? '0.08em' : '0.15em' }}>
+                        {visibleCodes.has(project.id) ? project.access_code : '••••••'}
+                      </span>
+                    </span>
+                    <button
+                      onClick={e => {
+                        e.preventDefault()
+                        setVisibleCodes(prev => {
+                          const next = new Set(prev)
+                          next.has(project.id) ? next.delete(project.id) : next.add(project.id)
+                          return next
+                        })
+                      }}
+                      className="p-0.5 rounded transition-colors flex-shrink-0"
+                      style={{ color: visibleCodes.has(project.id) ? 'var(--accent)' : 'var(--text-muted)' }}
+                      title={visibleCodes.has(project.id) ? 'Ocultar código' : 'Ver código'}
+                    >
+                      {visibleCodes.has(project.id) ? <EyeOff size={11} /> : <Eye size={11} />}
+                    </button>
+                  </div>
                 )}
               </div>
               {project.owner_id !== user?.id && (

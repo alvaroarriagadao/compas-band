@@ -142,6 +142,42 @@ export interface Database {
         Relationships: []
       }
     }
+      gig_dates: {
+        Row: {
+          id: string
+          project_id: string | null
+          title: string
+          date: string
+          end_date: string | null
+          status: string
+          venue: string | null
+          notes: string | null
+          setlist_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id?: string | null
+          title: string
+          date: string
+          end_date?: string | null
+          status?: string
+          venue?: string | null
+          notes?: string | null
+          setlist_id?: string | null
+        }
+        Update: {
+          project_id?: string | null
+          title?: string
+          date?: string
+          end_date?: string | null
+          status?: string
+          venue?: string | null
+          notes?: string | null
+          setlist_id?: string | null
+        }
+        Relationships: []
+      }
     Views: Record<string, never>
     Functions: Record<string, never>
     Enums: Record<string, never>

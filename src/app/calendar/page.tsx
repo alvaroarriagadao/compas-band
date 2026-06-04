@@ -84,8 +84,10 @@ export default function CalendarPage() {
   useEffect(() => { if (user) loadData() }, [user]) // eslint-disable-line
 
   async function loadData() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabase as any
     const [gigsRes, projRes] = await Promise.all([
-      supabase.from('gig_dates').select('*, project:project_id(name)').order('date'),
+      db.from('gig_dates').select('*, project:project_id(name)').order('date'),
       supabase.from('projects').select('id, name'),
     ])
     setGigs((gigsRes.data || []) as GigDate[])
@@ -132,25 +134,29 @@ export default function CalendarPage() {
       venue: fVenue.trim() || null, notes: fNotes.trim() || null,
       project_id: fProject || null,
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabase as any
     if (editId) {
-      const { data } = await supabase.from('gig_dates').update(payload).eq('id', editId).select('*, project:project_id(name)').single()
+      const { data } = await db.from('gig_dates').update(payload).eq('id', editId).select('*, project:project_id(name)').single()
       if (data) setGigs(gs => gs.map(g => g.id === editId ? data as GigDate : g))
     } else {
-      const { data } = await supabase.from('gig_dates').insert(payload).select('*, project:project_id(name)').single()
+      const { data } = await db.from('gig_dates').insert(payload).select('*, project:project_id(name)').single()
       if (data) { setGigs(gs => [...gs, data as GigDate]); setSelected(fDate) }
     }
     setShowAdd(false); setSaving(false)
   }
 
   async function deleteGig(id: string) {
-    await supabase.from('gig_dates').delete().eq('id', id)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('gig_dates').delete().eq('id', id)
     setGigs(gs => gs.filter(g => g.id !== id))
   }
 
   async function cycleStatus(g: GigDate) {
     const order: GigStatus[] = ['tentative', 'confirmed', 'cancelled']
     const next = order[(order.indexOf(g.status) + 1) % order.length]
-    await supabase.from('gig_dates').update({ status: next }).eq('id', g.id)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('gig_dates').update({ status: next }).eq('id', g.id)
     setGigs(gs => gs.map(x => x.id === g.id ? { ...x, status: next } : x))
   }
 

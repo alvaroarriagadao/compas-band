@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [success, setSuccess] = useState('')
+  const [emailSent, setEmailSent] = useState(false)
 
   useEffect(() => {
     if (!loading && user) router.replace('/')
@@ -21,16 +21,32 @@ export default function LoginPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setError(''); setSuccess(''); setSubmitting(true)
+    setError(''); setSubmitting(true)
 
     if (mode === 'login') {
       const { error } = await signIn(email, password)
-      if (error) setError(error.message === 'Invalid login credentials' ? 'Email o contraseña incorrectos' : error.message)
-      else router.replace('/')
+      if (error) {
+        setError(
+          error.message.includes('Invalid login credentials')
+            ? 'Email o contraseña incorrectos'
+            : error.message.includes('Email not confirmed')
+            ? 'Debes confirmar tu email antes. Revisa tu bandeja de entrada.'
+            : error.message
+        )
+      } else {
+        router.replace('/')
+      }
     } else {
-      const { error } = await signUp(email, password)
-      if (error) setError(error.message)
-      else setSuccess('Revisa tu email para confirmar tu cuenta.')
+      const { data, error } = await signUp(email, password)
+      if (error) {
+        setError(error.message)
+      } else if (data.session) {
+        // Email confirmation disabled — logged in directly
+        router.replace('/')
+      } else {
+        // Email confirmation enabled — show message
+        setEmailSent(true)
+      }
     }
     setSubmitting(false)
   }
@@ -43,13 +59,39 @@ export default function LoginPage() {
     )
   }
 
+  // Email sent confirmation screen
+  if (emailSent) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4 py-16" style={{ background: 'var(--bg-base)' }}>
+        <div className="w-full max-w-sm text-center fade-in">
+          <div className="text-6xl mb-4">📬</div>
+          <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Revisa tu email</h2>
+          <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
+            Enviamos un enlace de confirmación a <strong style={{ color: 'var(--text-secondary)' }}>{email}</strong>.
+            Haz clic en el enlace y volverás directamente a Compás.
+          </p>
+          <button
+            onClick={() => { setEmailSent(false); setMode('login') }}
+            className="w-full py-3 rounded-xl text-sm font-bold"
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+          >
+            Ya confirmé → Iniciar sesión
+          </button>
+          <p className="text-xs mt-6" style={{ color: 'var(--text-muted)' }}>
+            © {new Date().getFullYear()} Álvaro Arriagada Ortega. Todos los derechos reservados.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-16" style={{ background: 'var(--bg-base)' }}>
       {/* Logo */}
       <div className="mb-10 text-center fade-in">
         <div className="inline-flex items-center gap-3 mb-3">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', boxShadow: '0 0 30px rgba(245,158,11,0.35)' }}>
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="#000" strokeWidth="0">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="#000">
               <path d="M9 3v11.55A4 4 0 1 0 11 18V7h6V3H9z"/>
             </svg>
           </div>
@@ -63,7 +105,7 @@ export default function LoginPage() {
         {/* Mode tabs */}
         <div className="flex gap-1 p-1 rounded-2xl mb-6" style={{ background: 'var(--bg-elevated)' }}>
           {(['login', 'register'] as const).map(m => (
-            <button key={m} onClick={() => { setMode(m); setError(''); setSuccess('') }}
+            <button key={m} onClick={() => { setMode(m); setError('') }}
               className="flex-1 py-2 rounded-xl text-sm font-bold transition-all"
               style={{
                 background: mode === m ? 'var(--bg-card)' : 'transparent',
@@ -81,7 +123,7 @@ export default function LoginPage() {
               type="email" required autoFocus
               value={email} onChange={e => setEmail(e.target.value)}
               placeholder="tu@email.com"
-              className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+              className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
               style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
               onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'}
               onBlur={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'}
@@ -93,7 +135,7 @@ export default function LoginPage() {
               type="password" required minLength={6}
               value={password} onChange={e => setPassword(e.target.value)}
               placeholder={mode === 'register' ? 'Mínimo 6 caracteres' : '••••••••'}
-              className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+              className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
               style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
               onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'}
               onBlur={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'}
@@ -105,30 +147,38 @@ export default function LoginPage() {
               {error}
             </div>
           )}
-          {success && (
-            <div className="px-3 py-2.5 rounded-xl text-xs" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--green)', border: '1px solid rgba(16,185,129,0.2)' }}>
-              {success}
-            </div>
-          )}
 
           <button
             type="submit" disabled={submitting}
-            className="w-full py-3 rounded-xl text-sm font-bold mt-2 transition-all"
-            style={{ background: 'var(--accent)', color: '#000', opacity: submitting ? 0.7 : 1, boxShadow: '0 0 20px rgba(245,158,11,0.3)' }}
+            className="w-full py-3 rounded-xl text-sm font-bold mt-1 transition-all"
+            style={{ background: 'var(--accent)', color: '#000', opacity: submitting ? 0.7 : 1, boxShadow: '0 0 20px rgba(245,158,11,0.25)' }}
           >
             {submitting ? '...' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
           </button>
         </form>
 
-        <div className="mt-5 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
+        {/* Join with code */}
+        <div className="mt-5 pt-4 space-y-3" style={{ borderTop: '1px solid var(--border)' }}>
           <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
-            ¿Tienes un código de proyecto?{' '}
-            <a href="/join" className="font-semibold" style={{ color: 'var(--accent)' }}>Únete aquí</a>
+            ¿Tu banda te compartió un código?
           </p>
+          <a href="/join"
+            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
+            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-bright)'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'}
+          >
+            🎵 Unirse con código de proyecto
+          </a>
         </div>
       </div>
 
-      <p className="mt-8 text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+      {/* PWA hint */}
+      <p className="mt-5 text-xs text-center max-w-xs" style={{ color: 'var(--text-muted)' }}>
+        💡 Instala Compás como app en tu teléfono — no tendrás que volver a iniciar sesión.
+      </p>
+
+      <p className="mt-4 text-xs text-center" style={{ color: 'var(--text-muted)', opacity: 0.6 }}>
         © {new Date().getFullYear()} Álvaro Arriagada Ortega. Todos los derechos reservados.
       </p>
     </div>

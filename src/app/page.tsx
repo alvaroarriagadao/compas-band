@@ -3,12 +3,15 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, ChevronRight, LogOut, Users, Music2, KeyRound, X, Eye, EyeOff } from 'lucide-react'
+import { Plus, ChevronRight, LogOut, Users, Music2, KeyRound, X, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { PWAInstallButton } from '@/components/PWAInstall'
+import { FirstTimeNameModal } from '@/components/FirstTimeNameModal'
 import { supabase } from '@/lib/supabase'
 import { signOut, generateAccessCode, slugify } from '@/lib/auth'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Project } from '@/lib/database.types'
+
+const ADMIN_EMAIL = 'alvaro.arriagada101@gmail.com'
 
 export default function HomePage() {
   const router = useRouter()
@@ -16,6 +19,10 @@ export default function HomePage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [visibleCodes, setVisibleCodes] = useState<Set<string>>(new Set())
   const [showChangePassword, setShowChangePassword] = useState(false)
+  const [profile, setProfile] = useState<{ display_name: string | null; is_active: boolean } | null>(null)
+  const [profileLoaded, setProfileLoaded] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const any = supabase as any
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
@@ -33,8 +40,14 @@ export default function HomePage() {
   }, [user, loading, router])
 
   useEffect(() => {
-    if (user) loadProjects()
+    if (user) { loadProfile(); loadProjects() }
   }, [user]) // eslint-disable-line
+
+  async function loadProfile() {
+    const { data } = await any.from('profiles').select('display_name, is_active').eq('id', user!.id).single()
+    setProfile(data || { display_name: null, is_active: true })
+    setProfileLoaded(true)
+  }
 
   async function loadProjects() {
     if (!user) return
@@ -104,8 +117,36 @@ export default function HomePage() {
     )
   }
 
+  // Blocked user
+  if (profileLoaded && profile && !profile.is_active) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center gap-5" style={{ background: 'var(--bg-base)' }}>
+        <div className="text-5xl">🔒</div>
+        <div>
+          <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Cuenta desactivada</h2>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            Tu acceso a Compás ha sido desactivado.<br />Contacta al administrador para más información.
+          </p>
+        </div>
+        <button onClick={handleSignOut} className="px-5 py-2.5 rounded-xl text-sm font-bold"
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+          Cerrar sesión
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen px-4 py-8 max-w-xl mx-auto">
+      {/* First-time name modal */}
+      {profileLoaded && profile && !profile.display_name && user && (
+        <FirstTimeNameModal
+          userId={user.id}
+          email={user.email || ''}
+          onSaved={name => setProfile(p => p ? { ...p, display_name: name } : p)}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-10 fade-in">
         <div className="flex items-center gap-3">
@@ -116,11 +157,20 @@ export default function HomePage() {
           </div>
           <div>
             <h1 className="text-2xl font-black tracking-tight leading-none" style={{ color: 'var(--text-primary)' }}>Compás</h1>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{user?.email}</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              {profile?.display_name || user?.email}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
           <PWAInstallButton />
+          {user?.email === ADMIN_EMAIL && (
+            <Link href="/admin"
+              className="p-2.5 rounded-xl transition-colors"
+              style={{ color: 'var(--accent)' }}
+              title="Panel de administración"
+            ><ShieldCheck size={15} /></Link>
+          )}
           <button onClick={() => setShowChangePassword(true)} className="p-2.5 rounded-xl transition-colors" style={{ color: 'var(--text-muted)' }}
             onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}

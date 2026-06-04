@@ -41,10 +41,10 @@ const STATUS = {
 } as const
 
 const RSVP = {
-  yes:     { label: 'Sí puedo',   color: '#10b981', bg: 'rgba(16,185,129,0.2)',  emoji: '✅' },
-  maybe:   { label: 'Quizás',     color: '#f59e0b', bg: 'rgba(245,158,11,0.2)',  emoji: '🤔' },
-  no:      { label: 'No puedo',   color: '#ef4444', bg: 'rgba(239,68,68,0.2)',   emoji: '❌' },
-  pending: { label: 'Sin confirmar', color: '#555577', bg: 'transparent',         emoji: '❓' },
+  yes:     { label: 'Puedo',    color: '#10b981', bg: 'rgba(16,185,129,0.2)',  emoji: '✅' },
+  maybe:   { label: 'Quizás',   color: '#f59e0b', bg: 'rgba(245,158,11,0.2)',  emoji: '🤔' },
+  no:      { label: 'No puedo', color: '#ef4444', bg: 'rgba(239,68,68,0.2)',   emoji: '❌' },
+  pending: { label: 'Sin resp', color: '#555577', bg: 'transparent',            emoji: '❓' },
 } as const
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -134,17 +134,23 @@ export default function CalendarPage() {
   useEffect(() => { if (!loading && !user) router.replace('/login') }, [user,loading,router])
   useEffect(() => { if (user) loadData() }, [user]) // eslint-disable-line
 
-  const db = supabase as unknown as Record<string, (...args: unknown[]) => unknown>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const any = supabase as any
 
   async function loadData() {
-    const [gigsRes, projRes, attRes] = await Promise.all([
-      (db.from as Function)('gig_dates').select('*, project:project_id(name, access_code)').order('date'),
+    const [gigsRes, projRes] = await Promise.all([
+      any.from('gig_dates').select('*, project:project_id(name, access_code)').order('date'),
       supabase.from('projects').select('id, name, access_code'),
-      (db.from as Function)('gig_attendance').select('*'),
     ])
-    setGigs((gigsRes.data || []) as GigDate[])
+    const gigsData = (gigsRes.data || []) as GigDate[]
+    setGigs(gigsData)
     setProjects(projRes.data || [])
-    setAttendance((attRes.data || []) as Attendance[])
+
+    if (gigsData.length > 0) {
+      const gigIds = gigsData.map(g => g.id)
+      const { data: attData } = await any.from('gig_attendance').select('*').in('gig_id', gigIds)
+      setAttendance((attData || []) as Attendance[])
+    }
   }
 
   const gigsByDate = useMemo(() => buildGigsByDate(gigs), [gigs])
@@ -174,10 +180,10 @@ export default function CalendarPage() {
       project_id: fProject||null,
     }
     if (editId) {
-      const { data } = await (db.from as Function)('gig_dates').update(payload).eq('id',editId).select('*, project:project_id(name, access_code)').single()
+      const { data } = await any.from('gig_dates').update(payload).eq('id',editId).select('*, project:project_id(name, access_code)').single()
       if (data) setGigs(gs => gs.map(g => g.id === editId ? data as GigDate : g))
     } else {
-      const { data } = await (db.from as Function)('gig_dates').insert(payload).select('*, project:project_id(name, access_code)').single()
+      const { data } = await any.from('gig_dates').insert(payload).select('*, project:project_id(name, access_code)').single()
       if (data) { setGigs(gs => [...gs, data as GigDate]); setSelected(fDate) }
     }
     setShowAdd(false); setSaving(false)
@@ -185,14 +191,14 @@ export default function CalendarPage() {
 
   function confirmDelete(id: string, title: string) {
     if (!window.confirm(`¿Eliminar "${title}"?`)) return
-    ;(db.from as Function)('gig_dates').delete().eq('id',id)
+    ;any.from('gig_dates').delete().eq('id',id)
     setGigs(gs => gs.filter(g => g.id !== id))
     setAttendance(as => as.filter(a => a.gig_id !== id))
   }
 
   async function setGigStatus(g: GigDate, status: GigStatus) {
     if (g.status === status) return
-    await (db.from as Function)('gig_dates').update({status}).eq('id',g.id)
+    await any.from('gig_dates').update({status}).eq('id',g.id)
     setGigs(gs => gs.map(x => x.id===g.id ? {...x,status} : x))
   }
 
@@ -201,10 +207,10 @@ export default function CalendarPage() {
     const existing = attendance.find(a => a.gig_id===gigId && a.user_id===user.id)
     const payload = { gig_id: gigId, user_id: user.id, user_email: user.email, display_name: user.email?.split('@')[0], status }
     if (existing) {
-      await (db.from as Function)('gig_attendance').update({status}).eq('id',existing.id)
+      await any.from('gig_attendance').update({status}).eq('id',existing.id)
       setAttendance(as => as.map(a => a.id===existing.id ? {...a,status} : a))
     } else {
-      const { data } = await (db.from as Function)('gig_attendance').insert(payload).select().single()
+      const { data } = await any.from('gig_attendance').insert(payload).select().single()
       if (data) setAttendance(as => [...as, data as Attendance])
     }
   }

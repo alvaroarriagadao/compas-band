@@ -34,10 +34,10 @@ const STATUS = {
   cancelled:  { label: 'Cancelado',  color: '#ef4444', bg: 'rgba(239,68,68,0.15)', dot: '#ef4444', emoji: '❌' },
 } as const
 const RSVP = {
-  yes:     { label: 'Sí puedo',  color: '#10b981', bg: 'rgba(16,185,129,0.2)', emoji: '✅' },
-  maybe:   { label: 'Quizás',    color: '#f59e0b', bg: 'rgba(245,158,11,0.2)', emoji: '🤔' },
-  no:      { label: 'No puedo',  color: '#ef4444', bg: 'rgba(239,68,68,0.2)',  emoji: '❌' },
-  pending: { label: 'Pendiente', color: '#555577', bg: 'transparent',           emoji: '❓' },
+  yes:     { label: 'Puedo',    color: '#10b981', bg: 'rgba(16,185,129,0.2)', emoji: '✅' },
+  maybe:   { label: 'Quizás',   color: '#f59e0b', bg: 'rgba(245,158,11,0.2)', emoji: '🤔' },
+  no:      { label: 'No puedo', color: '#ef4444', bg: 'rgba(239,68,68,0.2)',  emoji: '❌' },
+  pending: { label: 'Sin resp', color: '#555577', bg: 'transparent',           emoji: '❓' },
 } as const
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -78,21 +78,30 @@ export default function SharedCalendarPage() {
   const [month, setMonth] = useState(now.getMonth())
   const [selected, setSelected] = useState(isoToday())
 
-  const db = supabase as unknown as Record<string, (...args: unknown[]) => unknown>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const any = supabase as any
 
   useEffect(() => { loadData() }, [code]) // eslint-disable-line
 
   async function loadData() {
-    const { data: proj } = await supabase.from('projects').select('id, name, description').eq('access_code', code.toUpperCase()).single()
-    if (!proj) { setNotFound(true); setLoading(false); return }
+    const { data: proj, error: projErr } = await supabase
+      .from('projects').select('id, name, description')
+      .eq('access_code', code.toUpperCase()).single()
+    if (!proj || projErr) { setNotFound(true); setLoading(false); return }
     setProject(proj)
 
-    const [gigsRes, attRes] = await Promise.all([
-      (db.from as Function)('gig_dates').select('*').eq('project_id', proj.id).order('date'),
-      (db.from as Function)('gig_attendance').select('*'),
-    ])
-    setGigs((gigsRes.data || []) as GigDate[])
-    setAttendance((attRes.data || []) as Attendance[])
+    const { data: gigsData } = await any
+      .from('gig_dates').select('*')
+      .eq('project_id', proj.id).order('date')
+    setGigs((gigsData || []) as GigDate[])
+
+    if (gigsData && gigsData.length > 0) {
+      const gigIds = gigsData.map((g: GigDate) => g.id)
+      const { data: attData } = await any
+        .from('gig_attendance').select('*')
+        .in('gig_id', gigIds)
+      setAttendance((attData || []) as Attendance[])
+    }
     setLoading(false)
   }
 
@@ -101,10 +110,10 @@ export default function SharedCalendarPage() {
     const existing = attendance.find(a => a.gig_id===gigId && a.user_id===user.id)
     const payload = { gig_id: gigId, user_id: user.id, user_email: user.email, display_name: user.email?.split('@')[0], status }
     if (existing) {
-      await (db.from as Function)('gig_attendance').update({status}).eq('id',existing.id)
+      await any.from('gig_attendance').update({status}).eq('id',existing.id)
       setAttendance(as => as.map(a => a.id===existing.id ? {...a,status} : a))
     } else {
-      const { data } = await (db.from as Function)('gig_attendance').insert(payload).select().single()
+      const { data } = await any.from('gig_attendance').insert(payload).select().single()
       if (data) setAttendance(as => [...as, data as Attendance])
     }
   }

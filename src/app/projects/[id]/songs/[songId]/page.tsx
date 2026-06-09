@@ -35,6 +35,8 @@ export default function SongPage() {
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [bpmPendingSave, setBpmPendingSave] = useState(false)
+  const [metroPendingSave, setMetroPendingSave] = useState(false)
+  const [showSavedConfirmation, setShowSavedConfirmation] = useState(false)
   const [lyricsMode, setLyricsMode] = useState<LyricsMode>('view')
   const [showHelp, setShowHelp] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
@@ -50,7 +52,6 @@ export default function SongPage() {
   } = useMetronomeStore()
 
   // Track if metro config changed so we can save it
-  const metroSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const metroConfigLoaded = useRef(false)
 
   useEffect(() => { loadData() }, [songId]) // eslint-disable-line
@@ -80,24 +81,11 @@ export default function SongPage() {
     setLoading(false)
   }
 
-  // Auto-save metro config when it changes (debounced 2s)
+  // Mark metro config as pending save when it changes — requires manual save
   useEffect(() => {
     if (!metroConfigLoaded.current || !song) return
-    if (metroSaveTimer.current) clearTimeout(metroSaveTimer.current)
-    metroSaveTimer.current = setTimeout(saveMetroConfig, 2000)
-    return () => { if (metroSaveTimer.current) clearTimeout(metroSaveTimer.current) }
+    setMetroPendingSave(true)
   }, [sound, subdivision, volume, beatsPerMeasure, accentDownbeat]) // eslint-disable-line
-
-  async function saveMetroConfig() {
-    if (!song) return
-    await supabase.from('songs').update({
-      metro_sound: sound,
-      metro_subdivision: subdivision,
-      metro_volume: volume,
-      metro_beats: beatsPerMeasure,
-      metro_accent: accentDownbeat,
-    }).eq('id', song.id)
-  }
 
   // Auto-save ONLY lyrics and notes — NOT bpm (multi-user safety)
   useEffect(() => {
@@ -124,10 +112,20 @@ export default function SongPage() {
   async function saveAll() {
     if (!song) return
     setSaving(true)
-    await supabase.from('songs').update({ lyrics, notes, bpm, title }).eq('id', song.id)
+    await supabase.from('songs').update({
+      lyrics, notes, bpm, title,
+      metro_sound: sound,
+      metro_subdivision: subdivision,
+      metro_volume: volume,
+      metro_beats: beatsPerMeasure,
+      metro_accent: accentDownbeat,
+    }).eq('id', song.id)
     setSaving(false)
     setDirty(false)
     setBpmPendingSave(false)
+    setMetroPendingSave(false)
+    setShowSavedConfirmation(true)
+    setTimeout(() => setShowSavedConfirmation(false), 2500)
   }
 
   function handleBpmChange(val: number) {
@@ -199,15 +197,19 @@ export default function SongPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          {(dirty || bpmPendingSave) && !saving && (
+          {(dirty || bpmPendingSave || metroPendingSave) && !saving && (
             <button onClick={saveAll}
               className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold"
-              style={{ background: bpmPendingSave ? 'var(--red)' : 'var(--accent)', color: '#000' }}>
-              <Save size={11} /> {bpmPendingSave ? 'Guardar BPM' : 'Guardar'}
+              style={{ background: (bpmPendingSave || metroPendingSave) ? 'var(--red)' : 'var(--accent)', color: '#000' }}>
+              <Save size={11} /> {(bpmPendingSave || metroPendingSave) ? 'Guardar cambios' : 'Guardar'}
             </button>
           )}
           {saving && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Guardando…</span>}
-          {!dirty && !saving && !bpmPendingSave && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>✓</span>}
+          {!dirty && !saving && !bpmPendingSave && !metroPendingSave && (
+            <span className="text-xs flex items-center gap-1" style={{ color: showSavedConfirmation ? 'var(--green)' : 'var(--text-muted)' }}>
+              ✓ {showSavedConfirmation && 'Guardado'}
+            </span>
+          )}
           <Link
             href={`/projects/${id}/songs/${songId}/read`}
             className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"

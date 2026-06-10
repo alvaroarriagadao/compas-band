@@ -37,6 +37,7 @@ export default function SongPage() {
   const [bpmPendingSave, setBpmPendingSave] = useState(false)
   const [metroPendingSave, setMetroPendingSave] = useState(false)
   const [showSavedConfirmation, setShowSavedConfirmation] = useState(false)
+  const [showSaveModal, setShowSaveModal] = useState(false)
   const [lyricsMode, setLyricsMode] = useState<LyricsMode>('view')
   const [showHelp, setShowHelp] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
@@ -198,7 +199,7 @@ export default function SongPage() {
 
         <div className="flex items-center gap-2 flex-shrink-0">
           {(dirty || bpmPendingSave || metroPendingSave) && !saving && (
-            <button onClick={saveAll}
+            <button onClick={() => setShowSaveModal(true)}
               className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold"
               style={{ background: (bpmPendingSave || metroPendingSave) ? 'var(--red)' : 'var(--accent)', color: '#000' }}>
               <Save size={11} /> {(bpmPendingSave || metroPendingSave) ? 'Guardar cambios' : 'Guardar'}
@@ -367,6 +368,47 @@ export default function SongPage() {
           </div>
         </div>
       </div>
+
+      {/* Save confirmation modal */}
+      {showSaveModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-6"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}
+          onClick={() => setShowSaveModal(false)}
+        >
+          <div
+            className="w-full max-w-xs rounded-3xl p-6 fade-in text-center"
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-bright)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="text-4xl mb-3">💾</div>
+            <h2 className="font-bold text-lg mb-1" style={{ color: 'var(--text-primary)' }}>
+              ¿Guardar cambios?
+            </h2>
+            <p className="text-sm mb-5" style={{ color: 'var(--text-muted)' }}>
+              {bpmPendingSave || metroPendingSave
+                ? 'Se actualizará el BPM y/o la configuración del metrónomo para esta canción.'
+                : 'Se guardarán los cambios de letra, notas o título.'}
+            </p>
+
+            <button
+              onClick={async () => { setShowSaveModal(false); await saveAll() }}
+              className="w-full py-3 rounded-2xl font-bold text-sm mb-2 transition-all"
+              style={{ background: 'var(--accent)', color: '#000' }}
+            >
+              <span className="inline-flex items-center gap-1.5"><Save size={14} /> Guardar</span>
+            </button>
+
+            <button
+              onClick={() => setShowSaveModal(false)}
+              className="text-xs"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

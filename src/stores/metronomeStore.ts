@@ -95,9 +95,9 @@ interface MetronomeState {
   setSubdivision: (sub: Subdivision) => void
   setBeatsPerMeasure: (n: number) => void
   setAccentDownbeat: (v: boolean) => void
-  start: (opts?: { songId?: string; songTitle?: string; bpm?: number }) => void
+  start: (opts?: { songId?: string; songTitle?: string; bpm?: number; sound?: ClickSound; volume?: number; subdivision?: Subdivision; beatsPerMeasure?: number; accentDownbeat?: boolean }) => void
   stop: () => void
-  toggle: (opts?: { songId?: string; songTitle?: string; bpm?: number }) => void
+  toggle: (opts?: { songId?: string; songTitle?: string; bpm?: number; sound?: ClickSound; volume?: number; subdivision?: Subdivision; beatsPerMeasure?: number; accentDownbeat?: boolean }) => void
 }
 
 export const useMetronomeStore = create<MetronomeState>((set, get) => {
@@ -158,13 +158,18 @@ export const useMetronomeStore = create<MetronomeState>((set, get) => {
       const ctx = getAudioCtx()
       if (schedulerTimer) clearTimeout(schedulerTimer)
 
-      const newBpm = opts?.bpm ?? get().bpm
       rawBeatCounter = 0
       nextBeatTime = ctx.currentTime + 0.05
 
+      // Apply song's saved config if provided
       set({
         isPlaying: true,
-        bpm: newBpm,
+        bpm:            opts?.bpm            ?? get().bpm,
+        sound:          opts?.sound          ?? get().sound,
+        volume:         opts?.volume         ?? get().volume,
+        subdivision:    opts?.subdivision    ?? get().subdivision,
+        beatsPerMeasure: opts?.beatsPerMeasure ?? get().beatsPerMeasure,
+        accentDownbeat: opts?.accentDownbeat ?? get().accentDownbeat,
         currentBeat: 0,
         currentSubdivision: 0,
         playingSongId: opts?.songId ?? null,

@@ -81,7 +81,16 @@ function SortableSetlistSong({ item, index, onRemove }: {
           )}
           {song && (
             <button
-              onClick={() => toggle({ songId: song.id, songTitle: song.title, bpm: song.bpm })}
+              onClick={() => toggle({
+                songId:          song.id,
+                songTitle:       song.title,
+                bpm:             song.bpm,
+                sound:           (song.metro_sound as 'classic'|'wood'|'soft') || 'classic',
+                volume:          song.metro_volume ?? 1.0,
+                subdivision:     (song.metro_subdivision as 1|2|3|4) || 1,
+                beatsPerMeasure: song.metro_beats ?? 4,
+                accentDownbeat:  song.metro_accent ?? true,
+              })}
               className="w-9 h-9 rounded-xl flex items-center justify-center transition-all"
               style={{
                 background: isThisPlaying ? 'var(--red)' : 'var(--green)',

@@ -98,7 +98,16 @@ function SortableSong({ song, index, onDelete, onEdit }: {
             style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--red)' }}
             title="Eliminar"
           ><Trash2 size={13} /></button>
-          <MetronomePlayButton songId={song.id} songTitle={song.title} bpm={song.bpm} />
+          <MetronomePlayButton
+            songId={song.id}
+            songTitle={song.title}
+            bpm={song.bpm}
+            sound={(song.metro_sound as 'classic' | 'wood' | 'soft') || 'classic'}
+            volume={song.metro_volume ?? 1.0}
+            subdivision={(song.metro_subdivision as 1|2|3|4) || 1}
+            beatsPerMeasure={song.metro_beats ?? 4}
+            accentDownbeat={song.metro_accent ?? true}
+          />
         </div>
       </div>
     </div>

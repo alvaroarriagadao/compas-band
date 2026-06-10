@@ -313,13 +313,37 @@ export function Metronome({ songId, songTitle, initialBpm, onBpmChange, compact 
 }
 
 // Compact inline version for status bar / playlist
-export function MetronomePlayButton({ songId, songTitle, bpm: songBpm }: { songId: string; songTitle: string; bpm: number }) {
-  const { isPlaying, playingSongId, toggle, sound, setSound } = useMetronomeStore()
-  const isThisSongPlaying = isPlaying && playingSongId === songId
+interface SongMetroConfig {
+  songId: string
+  songTitle: string
+  bpm: number
+  sound?: ClickSound
+  volume?: number
+  subdivision?: Subdivision
+  beatsPerMeasure?: number
+  accentDownbeat?: boolean
+}
+
+export function MetronomePlayButton(props: SongMetroConfig) {
+  const { isPlaying, playingSongId, toggle } = useMetronomeStore()
+  const isThisSongPlaying = isPlaying && playingSongId === props.songId
+
+  function handleToggle() {
+    toggle({
+      songId:          props.songId,
+      songTitle:       props.songTitle,
+      bpm:             props.bpm,
+      sound:           props.sound,
+      volume:          props.volume,
+      subdivision:     props.subdivision,
+      beatsPerMeasure: props.beatsPerMeasure,
+      accentDownbeat:  props.accentDownbeat,
+    })
+  }
 
   return (
     <button
-      onClick={() => toggle({ songId, songTitle, bpm: songBpm })}
+      onClick={handleToggle}
       className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150 flex-shrink-0"
       style={{
         background: isThisSongPlaying ? 'var(--red)' : 'var(--green)',

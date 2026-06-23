@@ -12,15 +12,15 @@ import {
   useSortable, verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ArrowLeft, Plus, GripVertical, Music, ChevronRight, Edit2, Check, X, Trash2, Copy, CalendarDays } from 'lucide-react'
+import { ArrowLeft, Plus, GripVertical, Music, ChevronRight, Edit2, Check, X, Trash2, Copy, CalendarDays, Mic, Disc3 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import type { Project, Song, Setlist } from '@/lib/database.types'
+import type { Project, Song, Setlist, Rehearsal } from '@/lib/database.types'
 import { useMetronomeStore, type ClickSound } from '@/stores/metronomeStore'
 import { MetronomePlayButton } from '@/components/Metronome'
 import { ProjectLogoUpload } from '@/components/ProjectLogoUpload'
 import { useAuth } from '@/contexts/AuthContext'
 
-type Tab = 'songs' | 'setlists'
+type Tab = 'songs' | 'setlists' | 'ensayos'
 
 const SOUNDS: { id: ClickSound; emoji: string; label: string }[] = [
   { id: 'classic', emoji: '🎯', label: 'Click' },
@@ -137,6 +137,10 @@ export default function ProjectPage() {
   const [newSetlistDate, setNewSetlistDate] = useState('')
   const [newSetlistVenue, setNewSetlistVenue] = useState('')
   const [codeCopied, setCodeCopied] = useState(false)
+  const [rehearsals, setRehearsals] = useState<Rehearsal[]>([])
+  const [showNewRehearsal, setShowNewRehearsal] = useState(false)
+  const [newRehearsalTitle, setNewRehearsalTitle] = useState('')
+  const [newRehearsalDate, setNewRehearsalDate] = useState('')
 
   const { isPlaying, playingSongId, playingSongTitle, bpm, stop, sound, setSound } = useMetronomeStore()
 
@@ -148,14 +152,16 @@ export default function ProjectPage() {
   useEffect(() => { loadData() }, [id]) // eslint-disable-line
 
   async function loadData() {
-    const [projRes, songsRes, setlistsRes] = await Promise.all([
+    const [projRes, songsRes, setlistsRes, rehearsalsRes] = await Promise.all([
       supabase.from('projects').select('*').eq('id', id).single(),
       supabase.from('songs').select('*').eq('project_id', id).order('song_order', { ascending: true }),
       supabase.from('setlists').select('*').eq('project_id', id).order('setlist_order', { ascending: true }),
+      supabase.from('rehearsals').select('*').eq('project_id', id).order('created_at', { ascending: false }),
     ])
     setProject(projRes.data)
     setSongs(songsRes.data || [])
     setSetlists(setlistsRes.data || [])
+    setRehearsals(rehearsalsRes.data || [])
     setLoading(false)
   }
 
@@ -202,6 +208,26 @@ export default function ProjectPage() {
     if (!confirm('¿Eliminar este setlist?')) return
     await supabase.from('setlists').delete().eq('id', setlistId)
     setSetlists(setlists.filter(s => s.id !== setlistId))
+  }
+
+  async function createRehearsal() {
+    if (!newRehearsalTitle.trim()) return
+    const { data } = await supabase
+      .from('rehearsals')
+      .insert({
+        project_id: id,
+        title: newRehearsalTitle.trim(),
+        rehearsal_date: newRehearsalDate || null,
+      })
+      .select().single()
+    if (data) setRehearsals([data, ...rehearsals])
+    setNewRehearsalTitle(''); setNewRehearsalDate(''); setShowNewRehearsal(false)
+  }
+
+  async function deleteRehearsal(rehearsalId: string) {
+    if (!confirm('¿Eliminar este ensayo y sus grabaciones?')) return
+    await supabase.from('rehearsals').delete().eq('id', rehearsalId)
+    setRehearsals(rehearsals.filter(r => r.id !== rehearsalId))
   }
 
   const handleDragEnd = useCallback(async (event: DragEndEvent) => {
@@ -269,7 +295,7 @@ export default function ProjectPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 p-1 rounded-2xl mb-5" style={{ background: 'var(--bg-card)' }}>
-          {(['songs', 'setlists'] as Tab[]).map(t => (
+          {(['songs', 'setlists', 'ensayos'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold transition-all"
               style={{
@@ -277,7 +303,9 @@ export default function ProjectPage() {
                 color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)',
               }}
             >
-              {t === 'songs' ? <><Music size={13} /> Canciones <span className="text-xs opacity-60">({songs.length})</span></> : <><CalendarDays size={13} /> Setlists <span className="text-xs opacity-60">({setlists.length})</span></>}
+              {t === 'songs' && <><Music size={13} /> Canciones <span className="text-xs opacity-60">({songs.length})</span></>}
+              {t === 'setlists' && <><CalendarDays size={13} /> Setlists <span className="text-xs opacity-60">({setlists.length})</span></>}
+              {t === 'ensayos' && <><Mic size={13} /> Ensayos <span className="text-xs opacity-60">({rehearsals.length})</span></>}
             </button>
           ))}
         </div>
@@ -481,6 +509,94 @@ export default function ProjectPage() {
                     </div>
                     <button
                       onClick={e => { e.preventDefault(); deleteSetlist(sl.id) }}
+                      className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--red)' }}
+                    ><Trash2 size={13} /></button>
+                    <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                  </Link>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── ENSAYOS TAB ── */}
+        {tab === 'ensayos' && (
+          <>
+            <Link href={`/projects/${id}/recordings`}
+              className="w-full flex items-center justify-between gap-2 p-3.5 rounded-2xl mb-3 fade-in"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.12)' }}>
+                  <Disc3 size={16} style={{ color: 'var(--accent)' }} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Grabaciones</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Todas las ideas grabadas, de todos los ensayos</p>
+                </div>
+              </div>
+              <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
+            </Link>
+
+            {!showNewRehearsal ? (
+              <button onClick={() => setShowNewRehearsal(true)}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed mb-4 text-sm font-medium transition-all duration-200"
+                style={{ borderColor: 'var(--border-bright)', color: 'var(--text-secondary)' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-bright)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)' }}
+              ><Plus size={14} /> Nuevo ensayo</button>
+            ) : (
+              <div className="rounded-2xl p-4 mb-4 fade-in" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-bright)' }}>
+                <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: 'var(--accent)' }}>Nuevo ensayo</p>
+                <input autoFocus type="text" placeholder='Ej: "Ensayo previo a tocata"'
+                  value={newRehearsalTitle} onChange={e => setNewRehearsalTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') createRehearsal(); if (e.key === 'Escape') setShowNewRehearsal(false) }}
+                  className="w-full px-3 py-2.5 rounded-xl text-sm mb-3 outline-none"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                />
+                <div className="mb-4">
+                  <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>Fecha</label>
+                  <input type="date" value={newRehearsalDate} onChange={e => setNewRehearsalDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)', colorScheme: 'dark' }}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={createRehearsal} disabled={!newRehearsalTitle.trim()}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold"
+                    style={{ background: 'var(--accent)', color: '#000', opacity: !newRehearsalTitle.trim() ? 0.5 : 1 }}>
+                    Crear ensayo
+                  </button>
+                  <button onClick={() => { setShowNewRehearsal(false); setNewRehearsalTitle('') }}
+                    className="px-3 py-2.5 rounded-xl text-sm"
+                    style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>Cancelar</button>
+                </div>
+              </div>
+            )}
+
+            {rehearsals.length === 0 ? (
+              <div className="text-center py-14 fade-in">
+                <div className="text-5xl mb-3">🎙️</div>
+                <p className="font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>No hay ensayos aún</p>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Crea uno para agregar notas y grabar ideas</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                {rehearsals.map((r, i) => (
+                  <Link key={r.id} href={`/projects/${id}/rehearsals/${r.id}`}
+                    className="group flex items-center gap-4 p-4 rounded-2xl transition-all fade-in"
+                    style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', animationDelay: `${i * 40}ms` }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-bright)'}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'}
+                  >
+                    <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center text-xl" style={{ background: 'var(--bg-elevated)' }}>🎙️</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{r.title}</p>
+                      {r.rehearsal_date && <span className="text-xs" style={{ color: 'var(--accent)' }}>📅 {formatDate(r.rehearsal_date)}</span>}
+                    </div>
+                    <button
+                      onClick={e => { e.preventDefault(); deleteRehearsal(r.id) }}
                       className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
                       style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--red)' }}
                     ><Trash2 size={13} /></button>

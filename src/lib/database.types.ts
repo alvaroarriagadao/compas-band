@@ -156,6 +156,54 @@ export interface Database {
         }
         Relationships: []
       }
+      rehearsals: {
+        Row: {
+          id: string
+          project_id: string
+          title: string
+          rehearsal_date: string | null
+          notes: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          title: string
+          rehearsal_date?: string | null
+          notes?: string
+        }
+        Update: {
+          title?: string
+          rehearsal_date?: string | null
+          notes?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      recordings: {
+        Row: {
+          id: string
+          rehearsal_id: string
+          project_id: string
+          title: string
+          audio_url: string
+          duration_seconds: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          rehearsal_id: string
+          project_id: string
+          title?: string
+          audio_url: string
+          duration_seconds?: number
+        }
+        Update: {
+          title?: string
+        }
+        Relationships: []
+      }
     }
       gig_dates: {
         Row: {
@@ -204,3 +252,5 @@ export type Project = Database['public']['Tables']['projects']['Row']
 export type Song = Database['public']['Tables']['songs']['Row']
 export type Setlist = Database['public']['Tables']['setlists']['Row']
 export type SetlistSong = Database['public']['Tables']['setlist_songs']['Row']
+export type Rehearsal = Database['public']['Tables']['rehearsals']['Row']
+export type Recording = Database['public']['Tables']['recordings']['Row']

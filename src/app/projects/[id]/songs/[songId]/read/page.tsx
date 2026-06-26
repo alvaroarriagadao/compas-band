@@ -27,12 +27,24 @@ export default function ReaderPage() {
   }, [songId]) // eslint-disable-line
 
   async function loadSong() {
-    const [songRes, siblingsRes] = await Promise.all([
-      supabase.from('songs').select('*').eq('id', songId).single(),
-      supabase.from('songs').select('*').eq('project_id', id).order('song_order'),
-    ])
+    const songRes = await supabase.from('songs').select('*').eq('id', songId).single()
     setSong(songRes.data)
-    setSiblings(siblingsRes.data || [])
+
+    if (backTo) {
+      // Reading from a setlist: order siblings by the setlist's own song order
+      const [setlistSongsRes, songsRes] = await Promise.all([
+        supabase.from('setlist_songs').select('*').eq('setlist_id', backTo).order('song_order'),
+        supabase.from('songs').select('*').eq('project_id', id),
+      ])
+      const songMap = new Map((songsRes.data || []).map(s => [s.id, s]))
+      const ordered = (setlistSongsRes.data || [])
+        .map(ss => (ss.song_id ? songMap.get(ss.song_id) : null))
+        .filter((s): s is Song => !!s)
+      setSiblings(ordered)
+    } else {
+      const siblingsRes = await supabase.from('songs').select('*').eq('project_id', id).order('song_order')
+      setSiblings(siblingsRes.data || [])
+    }
     setLoading(false)
   }
 

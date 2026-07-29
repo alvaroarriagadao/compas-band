@@ -141,6 +141,7 @@ export default function ProjectPage() {
   const [showNewRehearsal, setShowNewRehearsal] = useState(false)
   const [newRehearsalTitle, setNewRehearsalTitle] = useState('')
   const [newRehearsalDate, setNewRehearsalDate] = useState('')
+  const [rehearsalError, setRehearsalError] = useState('')
 
   const { isPlaying, playingSongId, playingSongTitle, bpm, stop, sound, setSound } = useMetronomeStore()
 
@@ -212,7 +213,8 @@ export default function ProjectPage() {
 
   async function createRehearsal() {
     if (!newRehearsalTitle.trim()) return
-    const { data } = await supabase
+    setRehearsalError('')
+    const { data, error } = await supabase
       .from('rehearsals')
       .insert({
         project_id: id,
@@ -220,6 +222,15 @@ export default function ProjectPage() {
         rehearsal_date: newRehearsalDate || null,
       })
       .select().single()
+
+    if (error) {
+      setRehearsalError(
+        error.message.includes('does not exist')
+          ? 'Falta crear las tablas de ensayos en Supabase (ejecuta supabase_ensayos.sql).'
+          : error.message
+      )
+      return
+    }
     if (data) setRehearsals([data, ...rehearsals])
     setNewRehearsalTitle(''); setNewRehearsalDate(''); setShowNewRehearsal(false)
   }
@@ -562,13 +573,18 @@ export default function ProjectPage() {
                     style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)', colorScheme: 'dark' }}
                   />
                 </div>
+                {rehearsalError && (
+                  <div className="px-3 py-2.5 rounded-xl text-xs mb-3" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--red)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                    {rehearsalError}
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <button onClick={createRehearsal} disabled={!newRehearsalTitle.trim()}
                     className="flex-1 py-2.5 rounded-xl text-sm font-bold"
                     style={{ background: 'var(--accent)', color: '#000', opacity: !newRehearsalTitle.trim() ? 0.5 : 1 }}>
                     Crear ensayo
                   </button>
-                  <button onClick={() => { setShowNewRehearsal(false); setNewRehearsalTitle('') }}
+                  <button onClick={() => { setShowNewRehearsal(false); setNewRehearsalTitle(''); setRehearsalError('') }}
                     className="px-3 py-2.5 rounded-xl text-sm"
                     style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>Cancelar</button>
                 </div>

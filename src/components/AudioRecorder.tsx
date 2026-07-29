@@ -6,8 +6,12 @@ import { supabase } from '@/lib/supabase'
 import type { Recording } from '@/lib/database.types'
 
 interface Props {
-  rehearsalId: string
+  /** Fixed rehearsal to attach recordings to. */
+  rehearsalId?: string
+  /** Resolved lazily when there is no fixed rehearsal (e.g. "Ideas generales"). */
+  resolveRehearsalId?: () => Promise<string | null>
   projectId: string
+  label?: string
   onSaved: (recording: Recording) => void
 }
 
@@ -19,7 +23,7 @@ function pickMimeType() {
   return ''
 }
 
-export function AudioRecorder({ rehearsalId, projectId, onSaved }: Props) {
+export function AudioRecorder({ rehearsalId, resolveRehearsalId, projectId, label, onSaved }: Props) {
   const [recording, setRecording] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [seconds, setSeconds] = useState(0)
@@ -63,10 +67,19 @@ export function AudioRecorder({ rehearsalId, projectId, onSaved }: Props) {
 
   async function handleStop() {
     setUploading(true)
+
+    const targetRehearsalId = rehearsalId ?? (await resolveRehearsalId?.() ?? null)
+    if (!targetRehearsalId) {
+      setError('No se pudo preparar el destino de la grabación. Revisa que las tablas de ensayos existan en Supabase.')
+      setUploading(false)
+      setSeconds(0)
+      return
+    }
+
     const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm'
     const ext = mimeType.includes('mp4') ? 'm4a' : 'webm'
     const blob = new Blob(chunksRef.current, { type: mimeType })
-    const path = `${projectId}/${rehearsalId}/${Date.now()}.${ext}`
+    const path = `${projectId}/${targetRehearsalId}/${Date.now()}.${ext}`
 
     const { error: uploadError } = await supabase.storage
       .from('rehearsal-recordings')
@@ -80,7 +93,7 @@ export function AudioRecorder({ rehearsalId, projectId, onSaved }: Props) {
       const { data, error: insertError } = await supabase
         .from('recordings')
         .insert({
-          rehearsal_id: rehearsalId,
+          rehearsal_id: targetRehearsalId,
           project_id: projectId,
           title: `Idea ${new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}`,
           audio_url: publicUrl,
@@ -107,7 +120,7 @@ export function AudioRecorder({ rehearsalId, projectId, onSaved }: Props) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-            {recording ? 'Grabando…' : uploading ? 'Guardando…' : 'Grabar idea'}
+            {recording ? 'Grabando…' : uploading ? 'Guardando…' : (label || 'Grabar idea')}
           </p>
           {recording && <p className="text-xs tabular-nums" style={{ color: 'var(--red)' }}>● {fmt(seconds)}</p>}
         </div>

@@ -1,11 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Play, Pause, Trash2, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Recording, Rehearsal } from '@/lib/database.types'
+import { AudioRecorder } from '@/components/AudioRecorder'
+
+const QUICK_IDEAS_TITLE = 'Ideas generales'
 
 function fmtDuration(s: number) {
   const m = Math.floor(s / 60)
@@ -55,7 +58,6 @@ function RecordingRow({ recording, rehearsalTitle, projectId, onDelete }: {
 
 export default function ProjectRecordingsPage() {
   const { id } = useParams<{ id: string }>()
-  const router = useRouter()
   const [recordings, setRecordings] = useState<Recording[]>([])
   const [rehearsalTitles, setRehearsalTitles] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
@@ -72,6 +74,32 @@ export default function ProjectRecordingsPage() {
     ;(rehsRes.data as Rehearsal[] || []).forEach(r => { titles[r.id] = r.title })
     setRehearsalTitles(titles)
     setLoading(false)
+  }
+
+  /** Find-or-create the catch-all "Ideas generales" rehearsal so you can record without picking one. */
+  async function resolveQuickIdeasRehearsal(): Promise<string | null> {
+    const { data: existing } = await supabase
+      .from('rehearsals')
+      .select('*')
+      .eq('project_id', id)
+      .eq('title', QUICK_IDEAS_TITLE)
+      .maybeSingle()
+
+    if (existing) {
+      setRehearsalTitles(t => ({ ...t, [existing.id]: existing.title }))
+      return existing.id
+    }
+
+    const { data: created } = await supabase
+      .from('rehearsals')
+      .insert({ project_id: id, title: QUICK_IDEAS_TITLE })
+      .select().single()
+
+    if (created) {
+      setRehearsalTitles(t => ({ ...t, [created.id]: created.title }))
+      return created.id
+    }
+    return null
   }
 
   async function deleteRecording(recordingId: string) {
@@ -96,11 +124,24 @@ export default function ProjectRecordingsPage() {
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Todas las ideas grabadas en cualquier ensayo</p>
         </div>
 
+        {/* Quick recorder — no rehearsal needed */}
+        <div className="mb-6">
+          <AudioRecorder
+            projectId={id}
+            label="Grabar idea rápida"
+            resolveRehearsalId={resolveQuickIdeasRehearsal}
+            onSaved={rec => setRecordings(r => [rec, ...r])}
+          />
+          <p className="text-xs mt-2 px-1" style={{ color: 'var(--text-muted)' }}>
+            Se guarda en &ldquo;{QUICK_IDEAS_TITLE}&rdquo; — no necesitas crear un ensayo.
+          </p>
+        </div>
+
         {recordings.length === 0 ? (
           <div className="text-center py-14 fade-in">
             <div className="text-5xl mb-3">🎤</div>
             <p className="font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>No hay grabaciones aún</p>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Entra a un ensayo y presiona grabar para capturar una idea</p>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Presiona el botón de arriba para capturar tu primera idea</p>
           </div>
         ) : (
           <div className="flex flex-col gap-2">

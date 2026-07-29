@@ -28,6 +28,7 @@ export function AudioRecorder({ rehearsalId, projectId, onSaved }: Props) {
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const secondsRef = useRef(0)
 
   async function startRecording() {
     setError('')
@@ -43,7 +44,11 @@ export function AudioRecorder({ rehearsalId, projectId, onSaved }: Props) {
       mr.start()
       setRecording(true)
       setSeconds(0)
-      timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000)
+      secondsRef.current = 0
+      timerRef.current = setInterval(() => {
+        secondsRef.current += 1
+        setSeconds(secondsRef.current)
+      }, 1000)
     } catch {
       setError('No se pudo acceder al micrófono. Revisa los permisos.')
     }
@@ -79,7 +84,7 @@ export function AudioRecorder({ rehearsalId, projectId, onSaved }: Props) {
           project_id: projectId,
           title: `Idea ${new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}`,
           audio_url: publicUrl,
-          duration_seconds: seconds,
+          duration_seconds: secondsRef.current,
         })
         .select().single()
       if (data) onSaved(data)

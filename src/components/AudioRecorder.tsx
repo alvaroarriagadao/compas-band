@@ -72,7 +72,7 @@ export function AudioRecorder({ rehearsalId, projectId, onSaved }: Props) {
         .from('rehearsal-recordings')
         .getPublicUrl(path)
 
-      const { data } = await supabase
+      const { data, error: insertError } = await supabase
         .from('recordings')
         .insert({
           rehearsal_id: rehearsalId,
@@ -83,8 +83,9 @@ export function AudioRecorder({ rehearsalId, projectId, onSaved }: Props) {
         })
         .select().single()
       if (data) onSaved(data)
+      else if (insertError) setError(`Error al guardar: ${insertError.message}`)
     } else {
-      setError('No se pudo guardar la grabación.')
+      setError(`Error al subir: ${uploadError.message}`)
     }
     setUploading(false)
     setSeconds(0)

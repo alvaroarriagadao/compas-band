@@ -22,7 +22,7 @@ export async function POST(request: Request) {
           tokenPayload: JSON.stringify({ userId: user.id }),
         }
       },
-      onUploadCompleted: async () => { /* la fila en la base se crea desde el cliente */ },
+      // Sin onUploadCompleted: la fila en la base la crea el cliente después de subir.
     })
     return NextResponse.json(json)
   } catch (e) {

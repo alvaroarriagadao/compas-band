@@ -1,9 +1,11 @@
-const CACHE = 'bandutils-v1'
-const APP_SHELL = ['/', '/manifest.json']
+// v2: excluye /api (auth y datos), otros orígenes y peticiones Range (audio).
+// Navegación con red primero para que siempre llegue la última versión de la app.
+const CACHE = 'compas-v2'
+const APP_SHELL = ['/', '/manifest.webmanifest']
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(APP_SHELL)).then(() => self.skipWaiting())
+    caches.open(CACHE).then(c => c.addAll(APP_SHELL)).catch(() => {}).then(() => self.skipWaiting())
   )
 })
 
@@ -16,24 +18,32 @@ self.addEventListener('activate', e => {
 })
 
 self.addEventListener('fetch', e => {
-  const url = new URL(e.request.url)
+  const req = e.request
+  const url = new URL(req.url)
 
-  // Skip Supabase API calls — always network
-  if (url.hostname.includes('supabase.co')) return
+  if (req.method !== 'GET') return
+  if (url.origin !== self.location.origin) return      // Vercel Blob, Neon Auth, fuentes externas
+  if (url.pathname.startsWith('/api/')) return          // sesión y datos: siempre red
+  if (req.headers.has('range')) return                  // reproducción de audio
 
-  // Skip non-GET
-  if (e.request.method !== 'GET') return
+  // Páginas: red primero, caché solo si no hay conexión
+  if (req.mode === 'navigate') {
+    e.respondWith(
+      fetch(req)
+        .then(res => {
+          if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)) }
+          return res
+        })
+        .catch(() => caches.match(req).then(r => r || caches.match('/')))
+    )
+    return
+  }
 
+  // Archivos estáticos (JS/CSS con hash, iconos): caché primero
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      const network = fetch(e.request).then(res => {
-        if (res.ok) {
-          const clone = res.clone()
-          caches.open(CACHE).then(c => c.put(e.request, clone))
-        }
-        return res
-      })
-      return cached || network
-    })
+    caches.match(req).then(cached => cached || fetch(req).then(res => {
+      if (res.ok && res.status === 200) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)) }
+      return res
+    }))
   )
 })

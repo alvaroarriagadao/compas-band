@@ -1,43 +1,36 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
-import { updatePassword } from '@/lib/auth'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import { resetPasswordWithToken } from '@/lib/auth'
 
-export default function UpdatePasswordPage() {
+function UpdatePasswordForm() {
   const router = useRouter()
-  const [ready, setReady] = useState(false)
+  const searchParams = useSearchParams()
+  const token = searchParams.get('token')
+  const linkError = searchParams.get('error')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
 
-  useEffect(() => {
-    // Supabase auto-detects the recovery code/token in the URL and fires PASSWORD_RECOVERY
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setReady(true)
-    })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') setReady(true)
-    })
-    return () => subscription.unsubscribe()
-  }, [])
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    if (!token) { setError('El enlace no es válido.'); return }
     if (password !== confirm) { setError('Las contraseñas no coinciden'); return }
-    if (password.length < 6) { setError('Mínimo 6 caracteres'); return }
+    if (password.length < 8) { setError('Mínimo 8 caracteres'); return }
     setSaving(true)
-    const { error } = await updatePassword(password)
+    const { error } = await resetPasswordWithToken(token, password)
     if (error) {
-      setError(error.message)
+      setError(error.code === 'INVALID_TOKEN' || error.message.toLowerCase().includes('token')
+        ? 'El enlace expiró o ya fue usado. Pide uno nuevo desde "¿Olvidaste tu contraseña?".'
+        : error.message)
     } else {
       setDone(true)
-      setTimeout(() => router.replace('/'), 2200)
+      setTimeout(() => router.replace('/login'), 2200)
     }
     setSaving(false)
   }
@@ -48,16 +41,26 @@ export default function UpdatePasswordPage() {
         <div className="text-center fade-in">
           <div className="text-5xl mb-3">✅</div>
           <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>¡Contraseña actualizada!</h2>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Entrando a Compás…</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Ya puedes iniciar sesión…</p>
         </div>
       </div>
     )
   }
 
-  if (!ready) {
+  if (!token || linkError) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
-        <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }} />
+      <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: 'var(--bg-base)' }}>
+        <div className="text-center fade-in max-w-sm">
+          <div className="text-5xl mb-3">⚠️</div>
+          <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Enlace no válido</h2>
+          <p className="text-sm mb-5" style={{ color: 'var(--text-muted)' }}>
+            El enlace para restablecer la contraseña expiró o ya fue usado. Pide uno nuevo.
+          </p>
+          <Link href="/login" className="inline-block px-5 py-2.5 rounded-xl text-sm font-bold"
+            style={{ background: 'var(--accent)', color: '#000' }}>
+            Volver al inicio de sesión
+          </Link>
+        </div>
       </div>
     )
   }
@@ -81,9 +84,9 @@ export default function UpdatePasswordPage() {
           <div>
             <label className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--text-muted)' }}>Nueva contraseña</label>
             <input
-              type="password" required minLength={6} autoFocus
+              type="password" required minLength={8} autoFocus
               value={password} onChange={e => setPassword(e.target.value)}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 8 caracteres"
               className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
               style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
               onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'}
@@ -119,5 +122,17 @@ export default function UpdatePasswordPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function UpdatePasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
+        <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }} />
+      </div>
+    }>
+      <UpdatePasswordForm />
+    </Suspense>
   )
 }

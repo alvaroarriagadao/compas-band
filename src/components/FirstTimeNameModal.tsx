@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 
 interface Props {
   userId: string
@@ -16,8 +16,7 @@ export function FirstTimeNameModal({ userId, email, onSaved }: Props) {
 
   async function save(displayName: string) {
     setSaving(true)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('profiles').upsert({
+    await db.from('profiles').upsert({
       id: userId,
       email,
       display_name: displayName.trim() || defaultName,

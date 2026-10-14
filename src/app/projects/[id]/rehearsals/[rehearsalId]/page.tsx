@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Trash2, Play, Pause, Save } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import type { Rehearsal, Recording } from '@/lib/database.types'
 import { AudioRecorder } from '@/components/AudioRecorder'
 
@@ -68,8 +68,8 @@ export default function RehearsalPage() {
 
   async function loadData() {
     const [rehRes, recsRes] = await Promise.all([
-      supabase.from('rehearsals').select('*').eq('id', rehearsalId).single(),
-      supabase.from('recordings').select('*').eq('rehearsal_id', rehearsalId).order('created_at', { ascending: false }),
+      db.from('rehearsals').select('*').eq('id', rehearsalId).single(),
+      db.from('recordings').select('*').eq('rehearsal_id', rehearsalId).order('created_at', { ascending: false }),
     ])
     if (rehRes.data) { setRehearsal(rehRes.data); setNotes(rehRes.data.notes || '') }
     setRecordings(recsRes.data || [])
@@ -86,14 +86,14 @@ export default function RehearsalPage() {
   async function saveNotes() {
     if (!rehearsal) return
     setSaving(true)
-    await supabase.from('rehearsals').update({ notes, updated_at: new Date().toISOString() }).eq('id', rehearsal.id)
+    await db.from('rehearsals').update({ notes, updated_at: new Date().toISOString() }).eq('id', rehearsal.id)
     setSaving(false)
     setDirty(false)
   }
 
   async function deleteRecording(recordingId: string) {
     if (!confirm('¿Eliminar esta grabación?')) return
-    await supabase.from('recordings').delete().eq('id', recordingId)
+    await db.from('recordings').delete().eq('id', recordingId)
     setRecordings(recordings.filter(r => r.id !== recordingId))
   }
 

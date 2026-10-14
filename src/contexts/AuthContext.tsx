@@ -1,40 +1,22 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import type { User, Session } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase'
+import { createContext, useContext, type ReactNode } from 'react'
+import { authClient } from '@/lib/auth-client'
+import type { AuthUser } from '@/lib/auth'
 
 interface AuthContextType {
-  user: User | null
-  session: Session | null
+  user: AuthUser | null
   loading: boolean
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, session: null, loading: true })
+const AuthContext = createContext<AuthContextType>({ user: null, loading: true })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      setUser(data.session?.user ?? null)
-      setLoading(false)
-    })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-
+  const { data, isPending } = authClient.useSession()
+  const u = data?.user
+  const user: AuthUser | null = u ? { id: u.id, email: u.email, name: u.name } : null
   return (
-    <AuthContext.Provider value={{ user, session, loading }}>
+    <AuthContext.Provider value={{ user, loading: isPending }}>
       {children}
     </AuthContext.Provider>
   )

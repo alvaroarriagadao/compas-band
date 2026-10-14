@@ -6,8 +6,8 @@ import Link from 'next/link'
 import { Plus, ChevronRight, LogOut, Users, Music2, KeyRound, X, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { PWAInstallButton } from '@/components/PWAInstall'
 import { FirstTimeNameModal } from '@/components/FirstTimeNameModal'
-import { supabase } from '@/lib/supabase'
-import { signOut, generateAccessCode, slugify } from '@/lib/auth'
+import { db } from '@/lib/db'
+import { signOut, changePassword, generateAccessCode, slugify } from '@/lib/auth'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Project } from '@/lib/database.types'
 
@@ -21,8 +21,7 @@ export default function HomePage() {
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [profile, setProfile] = useState<{ display_name: string | null; is_active: boolean } | null>(null)
   const [profileLoaded, setProfileLoaded] = useState(false)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const any = supabase as any
+  const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
@@ -44,7 +43,7 @@ export default function HomePage() {
   }, [user]) // eslint-disable-line
 
   async function loadProfile() {
-    const { data } = await any.from('profiles').select('display_name, is_active').eq('id', user!.id).single()
+    const { data } = await db.from('profiles').select('display_name, is_active').eq('id', user!.id).single()
     setProfile(data || { display_name: null, is_active: true })
     setProfileLoaded(true)
   }
@@ -54,15 +53,15 @@ export default function HomePage() {
 
     // Get owned + member projects
     const [owned, memberships] = await Promise.all([
-      supabase.from('projects').select('*').eq('owner_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('project_members').select('project_id').eq('user_id', user.id),
+      db.from('projects').select('*').eq('owner_id', user.id).order('created_at', { ascending: false }),
+      db.from('project_members').select('project_id').eq('user_id', user.id),
     ])
 
-    const memberIds = (memberships.data || []).map(m => m.project_id)
+    const memberIds = (memberships.data || []).map((m: { project_id: string }) => m.project_id)
     let allProjects = owned.data || []
 
     if (memberIds.length > 0) {
-      const { data: memberProjects } = await supabase
+      const { data: memberProjects } = await db
         .from('projects')
         .select('*')
         .in('id', memberIds)
@@ -79,7 +78,7 @@ export default function HomePage() {
     setSaving(true)
     const slug = slugify(newName)
     const code = generateAccessCode()
-    const { data } = await supabase
+    const { data } = await db
       .from('projects')
       .insert({
         name: newName.trim(),
@@ -100,12 +99,13 @@ export default function HomePage() {
 
   async function handleChangePassword() {
     setPwError('')
-    if (newPassword.length < 6) { setPwError('Mínimo 6 caracteres'); return }
+    if (!currentPassword) { setPwError('Ingresa tu contraseña actual'); return }
+    if (newPassword.length < 8) { setPwError('Mínimo 8 caracteres'); return }
     if (newPassword !== confirmPassword) { setPwError('Las contraseñas no coinciden'); return }
     setPwSaving(true)
-    const { error } = await supabase.auth.updateUser({ password: newPassword })
-    if (error) setPwError(error.message)
-    else { setPwSuccess(true); setTimeout(() => { setShowChangePassword(false); setPwSuccess(false); setNewPassword(''); setConfirmPassword('') }, 1800) }
+    const { error } = await changePassword(currentPassword, newPassword)
+    if (error) setPwError(error.code === 'INVALID_PASSWORD' || error.message.toLowerCase().includes('invalid password') ? 'La contraseña actual no es correcta' : error.message)
+    else { setPwSuccess(true); setTimeout(() => { setShowChangePassword(false); setPwSuccess(false); setCurrentPassword(''); setNewPassword(''); setConfirmPassword('') }, 1800) }
     setPwSaving(false)
   }
 
@@ -326,14 +326,27 @@ export default function HomePage() {
             ) : (
               <div className="space-y-3">
                 <div>
+                  <label className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--text-muted)' }}>Contraseña actual</label>
+                  <input
+                    type={showPw ? 'text' : 'password'}
+                    value={currentPassword}
+                    onChange={e => setCurrentPassword(e.target.value)}
+                    placeholder="Tu contraseña actual"
+                    className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                    onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'}
+                    onBlur={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'}
+                  />
+                </div>
+                <div>
                   <label className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--text-muted)' }}>Nueva contraseña</label>
                   <div className="relative">
                     <input
                       type={showPw ? 'text' : 'password'}
-                      minLength={6}
+                      minLength={8}
                       value={newPassword}
                       onChange={e => setNewPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
+                      placeholder="Mínimo 8 caracteres"
                       className="w-full px-4 py-3 rounded-xl text-sm outline-none pr-11"
                       style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
                       onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'}
@@ -348,7 +361,7 @@ export default function HomePage() {
                   <label className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--text-muted)' }}>Confirmar contraseña</label>
                   <input
                     type={showPw ? 'text' : 'password'}
-                    minLength={6}
+                    minLength={8}
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleChangePassword() }}
@@ -364,9 +377,9 @@ export default function HomePage() {
                 )}
                 <button
                   onClick={handleChangePassword}
-                  disabled={pwSaving || !newPassword || !confirmPassword}
+                  disabled={pwSaving || !currentPassword || !newPassword || !confirmPassword}
                   className="w-full py-3 rounded-xl text-sm font-bold mt-1"
-                  style={{ background: 'var(--accent)', color: '#000', opacity: (pwSaving || !newPassword || !confirmPassword) ? 0.5 : 1 }}
+                  style={{ background: 'var(--accent)', color: '#000', opacity: (pwSaving || !currentPassword || !newPassword || !confirmPassword) ? 0.5 : 1 }}
                 >
                   {pwSaving ? 'Guardando...' : 'Cambiar contraseña'}
                 </button>

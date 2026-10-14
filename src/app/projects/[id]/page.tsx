@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ArrowLeft, Plus, GripVertical, Music, ChevronRight, Edit2, Check, X, Trash2, Copy, CalendarDays, Mic, Disc3 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import type { Project, Song, Setlist, Rehearsal } from '@/lib/database.types'
 import { useMetronomeStore, type ClickSound } from '@/stores/metronomeStore'
 import { MetronomePlayButton } from '@/components/Metronome'
@@ -154,10 +154,10 @@ export default function ProjectPage() {
 
   async function loadData() {
     const [projRes, songsRes, setlistsRes, rehearsalsRes] = await Promise.all([
-      supabase.from('projects').select('*').eq('id', id).single(),
-      supabase.from('songs').select('*').eq('project_id', id).order('song_order', { ascending: true }),
-      supabase.from('setlists').select('*').eq('project_id', id).order('setlist_order', { ascending: true }),
-      supabase.from('rehearsals').select('*').eq('project_id', id).order('created_at', { ascending: false }),
+      db.from('projects').select('*').eq('id', id).single(),
+      db.from('songs').select('*').eq('project_id', id).order('song_order', { ascending: true }),
+      db.from('setlists').select('*').eq('project_id', id).order('setlist_order', { ascending: true }),
+      db.from('rehearsals').select('*').eq('project_id', id).order('created_at', { ascending: false }),
     ])
     setProject(projRes.data)
     setSongs(songsRes.data || [])
@@ -169,7 +169,7 @@ export default function ProjectPage() {
   async function createSong() {
     if (!newTitle.trim()) return
     setSaving(true)
-    const { data } = await supabase
+    const { data } = await db
       .from('songs')
       .insert({ project_id: id, title: newTitle.trim(), bpm: newBpm, song_order: songs.length })
       .select().single()
@@ -179,19 +179,19 @@ export default function ProjectPage() {
 
   async function deleteSong(songId: string) {
     if (playingSongId === songId) stop()
-    await supabase.from('songs').delete().eq('id', songId)
+    await db.from('songs').delete().eq('id', songId)
     setSongs(songs.filter(s => s.id !== songId))
   }
 
   async function saveEdit(songId: string) {
-    await supabase.from('songs').update({ title: editTitle, bpm: editBpm }).eq('id', songId)
+    await db.from('songs').update({ title: editTitle, bpm: editBpm }).eq('id', songId)
     setSongs(songs.map(s => s.id === songId ? { ...s, title: editTitle, bpm: editBpm } : s))
     setEditingId(null)
   }
 
   async function createSetlist() {
     if (!newSetlistName.trim()) return
-    const { data } = await supabase
+    const { data } = await db
       .from('setlists')
       .insert({
         project_id: id,
@@ -207,14 +207,14 @@ export default function ProjectPage() {
 
   async function deleteSetlist(setlistId: string) {
     if (!confirm('¿Eliminar este setlist?')) return
-    await supabase.from('setlists').delete().eq('id', setlistId)
+    await db.from('setlists').delete().eq('id', setlistId)
     setSetlists(setlists.filter(s => s.id !== setlistId))
   }
 
   async function createRehearsal() {
     if (!newRehearsalTitle.trim()) return
     setRehearsalError('')
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('rehearsals')
       .insert({
         project_id: id,
@@ -226,7 +226,7 @@ export default function ProjectPage() {
     if (error) {
       setRehearsalError(
         error.message.includes('does not exist')
-          ? 'Falta crear las tablas de ensayos en Supabase (ejecuta supabase_ensayos.sql).'
+          ? 'Faltan las tablas de ensayos en la base de datos (ejecuta db/schema.sql).'
           : error.message
       )
       return
@@ -237,7 +237,7 @@ export default function ProjectPage() {
 
   async function deleteRehearsal(rehearsalId: string) {
     if (!confirm('¿Eliminar este ensayo y sus grabaciones?')) return
-    await supabase.from('rehearsals').delete().eq('id', rehearsalId)
+    await db.from('rehearsals').delete().eq('id', rehearsalId)
     setRehearsals(rehearsals.filter(r => r.id !== rehearsalId))
   }
 
@@ -248,7 +248,7 @@ export default function ProjectPage() {
     const newIdx = songs.findIndex(s => s.id === over.id)
     const reordered = arrayMove(songs, oldIdx, newIdx)
     setSongs(reordered)
-    await Promise.all(reordered.map((s, i) => supabase.from('songs').update({ song_order: i }).eq('id', s.id)))
+    await Promise.all(reordered.map((s, i) => db.from('songs').update({ song_order: i }).eq('id', s.id)))
   }, [songs])
 
   function copyCode() {

@@ -2,7 +2,8 @@
 
 import { useRef, useState } from 'react'
 import { Mic, Square, Loader2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
+import { uploadFile } from '@/lib/storage'
 import type { Recording } from '@/lib/database.types'
 
 interface Props {
@@ -70,7 +71,7 @@ export function AudioRecorder({ rehearsalId, resolveRehearsalId, projectId, labe
 
     const targetRehearsalId = rehearsalId ?? (await resolveRehearsalId?.() ?? null)
     if (!targetRehearsalId) {
-      setError('No se pudo preparar el destino de la grabación. Revisa que las tablas de ensayos existan en Supabase.')
+      setError('No se pudo preparar el destino de la grabación. Intenta de nuevo.')
       setUploading(false)
       setSeconds(0)
       return
@@ -79,18 +80,12 @@ export function AudioRecorder({ rehearsalId, resolveRehearsalId, projectId, labe
     const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm'
     const ext = mimeType.includes('mp4') ? 'm4a' : 'webm'
     const blob = new Blob(chunksRef.current, { type: mimeType })
-    const path = `${projectId}/${targetRehearsalId}/${Date.now()}.${ext}`
+    const path = `recordings/${projectId}/${targetRehearsalId}/${Date.now()}.${ext}`
 
-    const { error: uploadError } = await supabase.storage
-      .from('rehearsal-recordings')
-      .upload(path, blob, { contentType: mimeType })
+    const { url: publicUrl, error: uploadError } = await uploadFile(path, blob, mimeType)
 
-    if (!uploadError) {
-      const { data: { publicUrl } } = supabase.storage
-        .from('rehearsal-recordings')
-        .getPublicUrl(path)
-
-      const { data, error: insertError } = await supabase
+    if (!uploadError && publicUrl) {
+      const { data, error: insertError } = await db
         .from('recordings')
         .insert({
           rehearsal_id: targetRehearsalId,
@@ -103,7 +98,7 @@ export function AudioRecorder({ rehearsalId, resolveRehearsalId, projectId, labe
       if (data) onSaved(data)
       else if (insertError) setError(`Error al guardar: ${insertError.message}`)
     } else {
-      setError(`Error al subir: ${uploadError.message}`)
+      setError(`Error al subir: ${uploadError?.message ?? 'desconocido'}`)
     }
     setUploading(false)
     setSeconds(0)

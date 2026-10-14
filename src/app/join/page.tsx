@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function JoinPage() {
@@ -18,7 +18,7 @@ export default function JoinPage() {
     e.preventDefault()
     setError(''); setLoading(true)
 
-    const { data: project } = await supabase
+    const { data: project } = await db
       .from('projects')
       .select('id, name')
       .eq('access_code', code.toUpperCase().trim())
@@ -32,7 +32,7 @@ export default function JoinPage() {
 
     if (user) {
       // Add as member
-      await supabase.from('project_members').upsert({
+      await db.from('project_members').upsert({
         project_id: project.id,
         user_id: user.id,
         role: 'member',

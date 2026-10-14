@@ -2,7 +2,8 @@
 
 import { useRef, useState } from 'react'
 import { Camera, Loader2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
+import { uploadFile } from '@/lib/storage'
 
 interface Props {
   projectId: string
@@ -20,18 +21,12 @@ export function ProjectLogoUpload({ projectId, currentUrl, onUploaded }: Props) 
     setUploading(true)
 
     const ext = file.name.split('.').pop()
-    const path = `${projectId}/logo.${ext}`
+    const path = `logos/${projectId}/logo-${Date.now()}.${ext}`
 
-    const { error } = await supabase.storage
-      .from('project-logos')
-      .upload(path, file, { upsert: true, contentType: file.type })
+    const { url: publicUrl, error } = await uploadFile(path, file, file.type)
 
-    if (!error) {
-      const { data: { publicUrl } } = supabase.storage
-        .from('project-logos')
-        .getPublicUrl(path)
-
-      await supabase.from('projects').update({ logo_url: publicUrl }).eq('id', projectId)
+    if (!error && publicUrl) {
+      await db.from('projects').update({ logo_url: publicUrl }).eq('id', projectId)
       onUploaded(publicUrl)
     }
     setUploading(false)

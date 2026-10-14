@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Plus, X, Edit2, MapPin, Clock, Share2, Copy, Check, Users } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import { useAuth } from '@/contexts/AuthContext'
 
 type GigStatus = 'tentative' | 'confirmed' | 'cancelled'
@@ -134,13 +134,11 @@ export default function CalendarPage() {
   useEffect(() => { if (!loading && !user) router.replace('/login') }, [user,loading,router])
   useEffect(() => { if (user) loadData() }, [user]) // eslint-disable-line
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const any = supabase as any
 
   async function loadData() {
     const [gigsRes, projRes] = await Promise.all([
-      any.from('gig_dates').select('*, project:project_id(name, access_code)').order('date'),
-      supabase.from('projects').select('id, name, access_code'),
+      db.from('gig_dates').select('*, project:project_id(name, access_code)').order('date'),
+      db.from('projects').select('id, name, access_code'),
     ])
     const gigsData = (gigsRes.data || []) as GigDate[]
     setGigs(gigsData)
@@ -148,7 +146,7 @@ export default function CalendarPage() {
 
     if (gigsData.length > 0) {
       const gigIds = gigsData.map(g => g.id)
-      const { data: attData } = await any.from('gig_attendance').select('*').in('gig_id', gigIds)
+      const { data: attData } = await db.from('gig_attendance').select('*').in('gig_id', gigIds)
       setAttendance((attData || []) as Attendance[])
     }
   }
@@ -180,10 +178,10 @@ export default function CalendarPage() {
       project_id: fProject||null,
     }
     if (editId) {
-      const { data } = await any.from('gig_dates').update(payload).eq('id',editId).select('*, project:project_id(name, access_code)').single()
+      const { data } = await db.from('gig_dates').update(payload).eq('id',editId).select('*, project:project_id(name, access_code)').single()
       if (data) setGigs(gs => gs.map(g => g.id === editId ? data as GigDate : g))
     } else {
-      const { data } = await any.from('gig_dates').insert(payload).select('*, project:project_id(name, access_code)').single()
+      const { data } = await db.from('gig_dates').insert(payload).select('*, project:project_id(name, access_code)').single()
       if (data) { setGigs(gs => [...gs, data as GigDate]); setSelected(fDate) }
     }
     setShowAdd(false); setSaving(false)
@@ -191,14 +189,14 @@ export default function CalendarPage() {
 
   function confirmDelete(id: string, title: string) {
     if (!window.confirm(`¿Eliminar "${title}"?`)) return
-    ;any.from('gig_dates').delete().eq('id',id)
+    ;db.from('gig_dates').delete().eq('id',id)
     setGigs(gs => gs.filter(g => g.id !== id))
     setAttendance(as => as.filter(a => a.gig_id !== id))
   }
 
   async function setGigStatus(g: GigDate, status: GigStatus) {
     if (g.status === status) return
-    await any.from('gig_dates').update({status}).eq('id',g.id)
+    await db.from('gig_dates').update({status}).eq('id',g.id)
     setGigs(gs => gs.map(x => x.id===g.id ? {...x,status} : x))
   }
 
@@ -207,10 +205,10 @@ export default function CalendarPage() {
     const existing = attendance.find(a => a.gig_id===gigId && a.user_id===user.id)
     const payload = { gig_id: gigId, user_id: user.id, user_email: user.email, display_name: user.email?.split('@')[0], status }
     if (existing) {
-      await any.from('gig_attendance').update({status}).eq('id',existing.id)
+      await db.from('gig_attendance').update({status}).eq('id',existing.id)
       setAttendance(as => as.map(a => a.id===existing.id ? {...a,status} : a))
     } else {
-      const { data } = await any.from('gig_attendance').insert(payload).select().single()
+      const { data } = await db.from('gig_attendance').insert(payload).select().single()
       if (data) setAttendance(as => [...as, data as Attendance])
     }
   }

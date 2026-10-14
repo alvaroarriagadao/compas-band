@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ArrowLeft, Plus, GripVertical, X, Play, Square, Calendar, MapPin, BookOpen } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import type { Song, Setlist, SetlistSong } from '@/lib/database.types'
 import { useMetronomeStore } from '@/stores/metronomeStore'
 
@@ -134,28 +134,28 @@ export default function SetlistPage() {
 
   async function loadData() {
     const [slRes, songsRes] = await Promise.all([
-      supabase.from('setlists').select('*').eq('id', setlistId).single(),
-      supabase.from('songs').select('*').eq('project_id', id).order('song_order'),
+      db.from('setlists').select('*').eq('id', setlistId).single(),
+      db.from('songs').select('*').eq('project_id', id).order('song_order'),
     ])
     setSetlist(slRes.data)
     setEditName(slRes.data?.name || '')
     setAvailableSongs(songsRes.data || [])
 
     // Load setlist songs with joined song data
-    const { data: slSongs } = await supabase
+    const { data: slSongs } = await db
       .from('setlist_songs')
       .select('*')
       .eq('setlist_id', setlistId)
       .order('song_order')
 
-    const songMap = new Map((songsRes.data || []).map(s => [s.id, s]))
-    setItems((slSongs || []).map(ss => ({ ...ss, song: ss.song_id ? (songMap.get(ss.song_id) || null) : null })))
+    const songMap = new Map<string, Song>((songsRes.data || []).map((s: Song) => [s.id, s]))
+    setItems((slSongs || []).map((ss: SetlistSong) => ({ ...ss, song: ss.song_id ? (songMap.get(ss.song_id) || null) : null })))
     setLoading(false)
   }
 
   async function addSong(song: Song) {
     const order = items.length
-    const { data } = await supabase
+    const { data } = await db
       .from('setlist_songs')
       .insert({ setlist_id: setlistId, song_id: song.id, song_order: order })
       .select().single()
@@ -164,7 +164,7 @@ export default function SetlistPage() {
   }
 
   async function removeItem(itemId: string) {
-    await supabase.from('setlist_songs').delete().eq('id', itemId)
+    await db.from('setlist_songs').delete().eq('id', itemId)
     setItems(items.filter(i => i.id !== itemId))
   }
 
@@ -176,13 +176,13 @@ export default function SetlistPage() {
     const reordered = arrayMove(items, oldIdx, newIdx)
     setItems(reordered)
     await Promise.all(reordered.map((item, idx) =>
-      supabase.from('setlist_songs').update({ song_order: idx }).eq('id', item.id)
+      db.from('setlist_songs').update({ song_order: idx }).eq('id', item.id)
     ))
   }, [items])
 
   async function saveSetlistName() {
     if (!editName.trim() || !setlist) return
-    await supabase.from('setlists').update({ name: editName.trim() }).eq('id', setlistId)
+    await db.from('setlists').update({ name: editName.trim() }).eq('id', setlistId)
     setSetlist({ ...setlist, name: editName.trim() })
     setEditing(false)
   }

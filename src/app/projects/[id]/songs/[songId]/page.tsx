@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save, Edit3, Info, ChevronDown, ChevronUp, BookOpen } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import type { Project, Song } from '@/lib/database.types'
 import { Metronome } from '@/components/Metronome'
 import { LyricsDisplay } from '@/components/LyricsDisplay'
@@ -59,8 +59,8 @@ export default function SongPage() {
 
   async function loadData() {
     const [projRes, songRes] = await Promise.all([
-      supabase.from('projects').select('*').eq('id', id).single(),
-      supabase.from('songs').select('*').eq('id', songId).single()
+      db.from('projects').select('*').eq('id', id).single(),
+      db.from('songs').select('*').eq('id', songId).single()
     ])
     setProject(projRes.data)
     if (songRes.data) {
@@ -99,21 +99,21 @@ export default function SongPage() {
   async function saveLyricsNotes() {
     if (!song) return
     setSaving(true)
-    await supabase.from('songs').update({ lyrics, notes, title }).eq('id', song.id)
+    await db.from('songs').update({ lyrics, notes, title }).eq('id', song.id)
     setSaving(false)
     setDirty(false)
   }
 
   async function saveBpm() {
     if (!song) return
-    await supabase.from('songs').update({ bpm }).eq('id', song.id)
+    await db.from('songs').update({ bpm }).eq('id', song.id)
     setBpmPendingSave(false)
   }
 
   async function saveAll() {
     if (!song) return
     setSaving(true)
-    await supabase.from('songs').update({
+    await db.from('songs').update({
       lyrics, notes, bpm, title,
       metro_sound: sound,
       metro_subdivision: subdivision,

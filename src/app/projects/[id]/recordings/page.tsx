@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Play, Pause, Trash2, ChevronRight } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import type { Recording, Rehearsal } from '@/lib/database.types'
 import { AudioRecorder } from '@/components/AudioRecorder'
 
@@ -66,8 +66,8 @@ export default function ProjectRecordingsPage() {
 
   async function loadData() {
     const [recsRes, rehsRes] = await Promise.all([
-      supabase.from('recordings').select('*').eq('project_id', id).order('created_at', { ascending: false }),
-      supabase.from('rehearsals').select('*').eq('project_id', id),
+      db.from('recordings').select('*').eq('project_id', id).order('created_at', { ascending: false }),
+      db.from('rehearsals').select('*').eq('project_id', id),
     ])
     setRecordings(recsRes.data || [])
     const titles: Record<string, string> = {}
@@ -78,7 +78,7 @@ export default function ProjectRecordingsPage() {
 
   /** Find-or-create the catch-all "Ideas generales" rehearsal so you can record without picking one. */
   async function resolveQuickIdeasRehearsal(): Promise<string | null> {
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from('rehearsals')
       .select('*')
       .eq('project_id', id)
@@ -90,7 +90,7 @@ export default function ProjectRecordingsPage() {
       return existing.id
     }
 
-    const { data: created } = await supabase
+    const { data: created } = await db
       .from('rehearsals')
       .insert({ project_id: id, title: QUICK_IDEAS_TITLE })
       .select().single()
@@ -104,7 +104,7 @@ export default function ProjectRecordingsPage() {
 
   async function deleteRecording(recordingId: string) {
     if (!confirm('¿Eliminar esta grabación?')) return
-    await supabase.from('recordings').delete().eq('id', recordingId)
+    await db.from('recordings').delete().eq('id', recordingId)
     setRecordings(recordings.filter(r => r.id !== recordingId))
   }
 

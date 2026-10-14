@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, UserCheck, UserX, RefreshCw, Search } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import { useAuth } from '@/contexts/AuthContext'
 
 const ADMIN_EMAIL = 'alvaro.arriagada101@gmail.com'
@@ -25,8 +25,6 @@ export default function AdminPage() {
   const [search, setSearch] = useState('')
   const [toggling, setToggling] = useState<string | null>(null)
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const any = supabase as any
 
   useEffect(() => {
     if (!loading) {
@@ -38,7 +36,7 @@ export default function AdminPage() {
 
   async function loadProfiles() {
     setFetching(true)
-    const { data } = await any.from('profiles').select('*').order('created_at', { ascending: false })
+    const { data } = await db.from('profiles').select('*').order('created_at', { ascending: false })
     setProfiles(data || [])
     setFetching(false)
   }
@@ -46,7 +44,7 @@ export default function AdminPage() {
   async function toggleActive(profile: Profile) {
     setToggling(profile.id)
     const newStatus = !profile.is_active
-    await any.from('profiles').update({ is_active: newStatus }).eq('id', profile.id)
+    await db.from('profiles').update({ is_active: newStatus }).eq('id', profile.id)
     setProfiles(ps => ps.map(p => p.id === profile.id ? { ...p, is_active: newStatus } : p))
     setToggling(null)
   }

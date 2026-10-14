@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn, signUp, resetPasswordForEmail } from '@/lib/auth'
 import { useAuth } from '@/contexts/AuthContext'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 
 function LoginForm() {
   const router = useRouter()
@@ -27,14 +27,14 @@ function LoginForm() {
   }, [user, loading]) // eslint-disable-line
 
   async function handleJoinAfterAuth(userId: string, code: string) {
-    const { data: project } = await supabase
+    const { data: project } = await db
       .from('projects')
       .select('id')
       .eq('access_code', code.toUpperCase())
       .single()
 
     if (project) {
-      await supabase.from('project_members').upsert({
+      await db.from('project_members').upsert({
         project_id: project.id,
         user_id: userId,
         role: 'member',
@@ -59,29 +59,34 @@ function LoginForm() {
     setError(''); setSubmitting(true)
 
     if (mode === 'login') {
-      const { data, error } = await signIn(email, password)
+      const { user: signedIn, error } = await signIn(email, password)
       if (error) {
+        const msg = error.message.toLowerCase()
         setError(
-          error.message.includes('Invalid login credentials')
+          error.code === 'INVALID_EMAIL_OR_PASSWORD' || msg.includes('invalid email or password') || msg.includes('invalid password')
             ? 'Email o contraseña incorrectos'
-            : error.message.includes('Email not confirmed')
+            : error.code === 'EMAIL_NOT_VERIFIED' || msg.includes('not verified')
             ? 'Debes confirmar tu email primero. Revisa tu bandeja de entrada.'
             : error.message
         )
-      } else if (data.session) {
-        if (joinCode) await handleJoinAfterAuth(data.session.user.id, joinCode)
+      } else if (signedIn) {
+        if (joinCode) await handleJoinAfterAuth(signedIn.id, joinCode)
         else router.replace('/')
       }
     } else {
-      const { data, error } = await signUp(email, password)
+      const { user: created, pendingVerification, error } = await signUp(email, password)
       if (error) {
-        setError(error.message)
-      } else if (data.session) {
-        // Email confirmation disabled — logged in directly
-        if (joinCode) await handleJoinAfterAuth(data.session.user.id, joinCode)
+        setError(
+          error.code === 'USER_ALREADY_EXISTS' || error.message.toLowerCase().includes('already exists')
+            ? 'Ya existe una cuenta con ese email. Inicia sesión o recupera tu contraseña.'
+            : error.message
+        )
+      } else if (created && !pendingVerification) {
+        // Sin verificación de email: queda logueado de inmediato
+        if (joinCode) await handleJoinAfterAuth(created.id, joinCode)
         else router.replace('/')
       } else {
-        // Email confirmation enabled — show message
+        // Verificación de email activada: mostrar aviso
         setEmailSent(true)
       }
     }
@@ -234,9 +239,9 @@ function LoginForm() {
                   )}
                 </div>
                 <input
-                  type="password" required minLength={6}
+                  type="password" required minLength={8}
                   value={password} onChange={e => setPassword(e.target.value)}
-                  placeholder={mode === 'register' ? 'Mínimo 6 caracteres' : '••••••••'}
+                  placeholder={mode === 'register' ? 'Mínimo 8 caracteres' : '••••••••'}
                   className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
                   style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
                   onFocus={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'}

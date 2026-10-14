@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, MapPin, Clock, Users, LogIn } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import { useAuth } from '@/contexts/AuthContext'
 
 type GigStatus = 'tentative' | 'confirmed' | 'cancelled'
@@ -78,26 +78,24 @@ export default function SharedCalendarPage() {
   const [month, setMonth] = useState(now.getMonth())
   const [selected, setSelected] = useState(isoToday())
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const any = supabase as any
 
   useEffect(() => { loadData() }, [code]) // eslint-disable-line
 
   async function loadData() {
-    const { data: proj, error: projErr } = await supabase
+    const { data: proj, error: projErr } = await db
       .from('projects').select('id, name, description')
       .eq('access_code', code.toUpperCase()).single()
     if (!proj || projErr) { setNotFound(true); setLoading(false); return }
     setProject(proj)
 
-    const { data: gigsData } = await any
+    const { data: gigsData } = await db
       .from('gig_dates').select('*')
       .eq('project_id', proj.id).order('date')
     setGigs((gigsData || []) as GigDate[])
 
     if (gigsData && gigsData.length > 0) {
       const gigIds = gigsData.map((g: GigDate) => g.id)
-      const { data: attData } = await any
+      const { data: attData } = await db
         .from('gig_attendance').select('*')
         .in('gig_id', gigIds)
       setAttendance((attData || []) as Attendance[])
@@ -110,10 +108,10 @@ export default function SharedCalendarPage() {
     const existing = attendance.find(a => a.gig_id===gigId && a.user_id===user.id)
     const payload = { gig_id: gigId, user_id: user.id, user_email: user.email, display_name: user.email?.split('@')[0], status }
     if (existing) {
-      await any.from('gig_attendance').update({status}).eq('id',existing.id)
+      await db.from('gig_attendance').update({status}).eq('id',existing.id)
       setAttendance(as => as.map(a => a.id===existing.id ? {...a,status} : a))
     } else {
-      const { data } = await any.from('gig_attendance').insert(payload).select().single()
+      const { data } = await db.from('gig_attendance').insert(payload).select().single()
       if (data) setAttendance(as => [...as, data as Attendance])
     }
   }

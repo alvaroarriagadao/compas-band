@@ -234,3 +234,8 @@ create table if not exists finance_log (
   created_at timestamptz not null default now()
 );
 create index if not exists finance_log_project_idx on finance_log(project_id, created_at desc);
+
+-- v2 caja: pagos históricos (ya incluidos en el saldo inicial) y pagos parciales/múltiples por mes
+alter table treasury_fee_checks add column if not exists historical boolean not null default false;
+alter table treasury_fee_checks drop constraint if exists treasury_fee_checks_member_id_month_key;
+create index if not exists treasury_fee_checks_member_month_idx on treasury_fee_checks(member_id, month);

@@ -11,7 +11,7 @@ export interface ExpenseShare {
   paid_at: string | null; paid_marked_by: string | null
 }
 export interface TreasurySettings { project_id: string; monthly_fee: number; start_month: string; opening_balance: number; opening_note: string | null }
-export interface FeeCheck { id: string; member_id: string; month: string; amount: number; checked_by_name: string | null; checked_at: string }
+export interface FeeCheck { id: string; member_id: string; month: string; amount: number; historical: boolean; checked_by_name: string | null; checked_at: string }
 export interface TreasuryExpense { id: string; expense_date: string; description: string; amount: number; paid_to: string | null; created_by_name: string | null; created_at: string }
 export interface LogEntry { id: string; module: 'gastos' | 'caja'; action: string; detail: string; user_name: string | null; created_at: string }
 export interface Candidate { user_id: string; name: string }
@@ -151,26 +151,53 @@ export function expenseProgress(expense: SharedExpense, shares: ExpenseShare[]) 
 }
 
 // ---------- caja ----------
+export type MonthState = 'paid' | 'partial' | 'pending' | 'future' | 'off'
+export interface MonthStatus { key: string; due: number; paid: number; remaining: number; state: MonthState; payments: FeeCheck[] }
+
 export interface TreasurySummary {
-  months: string[]
-  feesCollected: number
+  months: string[]            // meses exigibles: desde el inicio hasta el mes actual
+  feesCollected: number       // cuotas que entraron a la caja desde el saldo inicial
+  historicalFees: number      // cuotas ya incluidas en el saldo inicial (Excel)
   expensesTotal: number
   balance: number
-  perMember: { member: FinMember; paidCount: number; paidAmount: number; pending: string[]; pendingAmount: number }[]
+  receivable: number          // total adeudado en cuotas
+  perMember: { member: FinMember; paidAmount: number; pending: string[]; pendingAmount: number }[]
+}
+
+/** Estado de un mes para un integrante. Un mes se paga con uno o más pagos (parciales) hasta llegar a la cuota. */
+export function monthStatus(snap: FinanceSnapshot, memberId: string, key: string, today = todayStr()): MonthStatus {
+  const s = snap.treasury.settings
+  const payments = snap.treasury.checks.filter(c => c.member_id === memberId && monthKey(c.month) === key)
+  const paid = payments.reduce((a, c) => a + c.amount, 0)
+  const due = s.monthly_fee
+  const remaining = Math.max(0, due - paid)
+  let state: MonthState
+  if (paid >= due && due > 0) state = 'paid'
+  else if (paid > 0) state = 'partial'
+  else if (key < monthKey(s.start_month)) state = 'off'
+  else if (key > monthKey(today)) state = 'future'
+  else state = 'pending'
+  return { key, due, paid, remaining, state, payments }
 }
 
 export function treasurySummary(snap: FinanceSnapshot, today = todayStr()): TreasurySummary {
   const s = snap.treasury.settings
   const months = monthsBetween(s.start_month, today)
   const checks = snap.treasury.checks
-  const feesCollected = checks.reduce((a, c) => a + c.amount, 0)
+  const feesCollected = checks.filter(c => !c.historical).reduce((a, c) => a + c.amount, 0)
+  const historicalFees = checks.filter(c => c.historical).reduce((a, c) => a + c.amount, 0)
   const expensesTotal = snap.treasury.expenses.reduce((a, e) => a + e.amount, 0)
   const balance = s.opening_balance + feesCollected - expensesTotal
   const perMember = snap.members.filter(m => m.active).map(member => {
-    const mine = checks.filter(c => c.member_id === member.id)
-    const paidMonths = new Set(mine.map(c => monthKey(c.month)))
-    const pending = months.filter(k => !paidMonths.has(k))
-    return { member, paidCount: mine.length, paidAmount: mine.reduce((a, c) => a + c.amount, 0), pending, pendingAmount: pending.length * s.monthly_fee }
+    const statuses = months.map(k => monthStatus(snap, member.id, k, today))
+    const pendingStatuses = statuses.filter(st => st.remaining > 0)
+    return {
+      member,
+      paidAmount: checks.filter(c => c.member_id === member.id).reduce((a, c) => a + c.amount, 0),
+      pending: pendingStatuses.map(st => st.key),
+      pendingAmount: pendingStatuses.reduce((a, st) => a + st.remaining, 0),
+    }
   })
-  return { months, feesCollected, expensesTotal, balance, perMember }
+  const receivable = perMember.reduce((a, p) => a + p.pendingAmount, 0)
+  return { months, feesCollected, historicalFees, expensesTotal, balance, receivable, perMember }
 }

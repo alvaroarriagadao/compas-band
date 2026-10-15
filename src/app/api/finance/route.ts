@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { neon } from '@neondatabase/serverless'
 import { getServerUser } from '@/lib/auth-server'
-import { splitExpense, type FinanceSnapshot, type TreasurySettings } from '@/lib/finance'
+import { splitExpense, monthLabel, type FinanceSnapshot, type TreasurySettings } from '@/lib/finance'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -38,7 +38,7 @@ async function loadSnapshot(projectId: string): Promise<FinanceSnapshot> {
     q('select id, project_id, paid_by, description, amount, expense_date::text, installments, notes, created_by_name, created_at from shared_expenses where project_id = $1 order by expense_date desc, created_at desc', [projectId]),
     q('select s.id, s.expense_id, s.member_id, s.installment_no, s.due_date::text, s.amount, s.paid_at, s.paid_marked_by from shared_expense_shares s join shared_expenses e on e.id = s.expense_id where e.project_id = $1', [projectId]),
     q('select project_id, monthly_fee, start_month::text, opening_balance, opening_note from treasury_settings where project_id = $1', [projectId]),
-    q('select id, member_id, month::text, amount, checked_by_name, checked_at from treasury_fee_checks where project_id = $1', [projectId]),
+    q('select id, member_id, month::text, amount, historical, checked_by_name, checked_at from treasury_fee_checks where project_id = $1 order by checked_at', [projectId]),
     q('select id, expense_date::text, description, amount, paid_to, created_by_name, created_at from treasury_expenses where project_id = $1 order by expense_date desc, created_at desc', [projectId]),
     q('select id, module, action, detail, user_name, created_at from finance_log where project_id = $1 order by created_at desc limit 200', [projectId]),
   ])
@@ -223,19 +223,39 @@ export async function POST(request: Request) {
         await log(projectId, 'caja', 'settings', `Configuró la caja: cuota ${fmt(fee)}, desde ${start.slice(0, 7)}, saldo inicial ${fmt(opening)}`, actor)
         break
       }
-      case 'fee.toggle': {
+      case 'fee.pay': {
         const m = await memberById(body.member_id)
         if (!isDate(body.month)) throw bad('Mes inválido')
         const month = body.month.slice(0, 7) + '-01'
-        const checked = Boolean(body.checked)
         const [settings] = await q('select monthly_fee from treasury_settings where project_id = $1', [projectId])
         const fee = (settings?.monthly_fee as number | undefined) ?? 5000
-        if (checked) {
-          await q('insert into treasury_fee_checks (project_id, member_id, month, amount, checked_by, checked_by_name) values ($1,$2,$3,$4,$5,$6) on conflict (member_id, month) do nothing', [projectId, m.id, month, fee, actor.id, actor.name])
-        } else {
-          await q('delete from treasury_fee_checks where member_id = $1 and month = $2', [m.id, month])
-        }
-        await log(projectId, 'caja', checked ? 'fee.checked' : 'fee.unchecked', `${checked ? 'Marcó pagada' : 'Desmarcó'} la cuota de ${m.name} de ${month.slice(0, 7)} (${fmt(fee)})`, actor)
+        const requested = body.amount === undefined || body.amount === null ? null : toInt(body.amount, 'Monto')
+        if (requested !== null && requested <= 0) throw bad('El monto debe ser mayor a 0')
+        // Inserta solo lo que falta para completar la cuota (evita pagos dobles por doble toque)
+        const [row] = await q(
+          `with paid as (select coalesce(sum(amount), 0)::int as total from treasury_fee_checks where member_id = $1 and month = $2)
+           insert into treasury_fee_checks (project_id, member_id, month, amount, historical, checked_by, checked_by_name)
+           select $3, $1, $2, least(coalesce($4::int, $5::int - paid.total), $5::int - paid.total), false, $6, $7 from paid
+           where $5::int - paid.total > 0
+           returning amount, (select total from paid) as before`,
+          [m.id, month, projectId, requested, fee, actor.id, actor.name])
+        if (!row) throw bad(`La cuota de ${m.name} de ${monthLabel(month.slice(0, 7))} ya está pagada`)
+        const amount = row.amount as number, before = row.before as number
+        const after = before + amount
+        await log(projectId, 'caja', 'fee.paid', after >= fee
+          ? `Marcó pagada la cuota de ${m.name} de ${monthLabel(month.slice(0, 7))} (+${fmt(amount)})`
+          : `Registró pago parcial de ${m.name} de ${monthLabel(month.slice(0, 7))}: +${fmt(amount)} (falta ${fmt(fee - after)})`, actor)
+        break
+      }
+      case 'fee.clear': {
+        const m = await memberById(body.member_id)
+        if (!isDate(body.month)) throw bad('Mes inválido')
+        const month = body.month.slice(0, 7) + '-01'
+        const rows = await q('delete from treasury_fee_checks where member_id = $1 and month = $2 returning amount, historical', [m.id, month])
+        if (!rows.length) throw bad('Ese mes no tiene pagos')
+        const total = rows.reduce((a, r) => a + (r.amount as number), 0)
+        const hist = rows.some(r => r.historical)
+        await log(projectId, 'caja', 'fee.cleared', `Quitó el pago de ${m.name} de ${monthLabel(month.slice(0, 7))} (−${fmt(total)}${hist ? ', registro del Excel' : ''})`, actor)
         break
       }
       case 'treasury.expense.add': {

@@ -141,3 +141,96 @@ begin
     execute format('create trigger %I_set_updated_at before update on %I for each row execute function set_updated_at()', t, t);
   end loop;
 end $$;
+
+-- ===================== Finanzas =====================
+-- Integrantes "financieros" de la banda (pueden o no tener cuenta en la app)
+create table if not exists finance_members (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects(id) on delete cascade,
+  name text not null,
+  user_id text,
+  active boolean not null default true,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists finance_members_project_idx on finance_members(project_id);
+
+-- Sistema 1: gastos compartidos (alguien paga, el resto le devuelve en cuotas)
+create table if not exists shared_expenses (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects(id) on delete cascade,
+  paid_by uuid not null references finance_members(id) on delete restrict,
+  description text not null,
+  amount integer not null check (amount > 0),
+  expense_date date not null default current_date,
+  installments integer not null default 1 check (installments between 1 and 36),
+  notes text,
+  created_by text,
+  created_by_name text,
+  created_at timestamptz not null default now()
+);
+create index if not exists shared_expenses_project_idx on shared_expenses(project_id);
+
+-- Una fila por integrante (distinto del pagador) y cuota: cuánto debe y si ya pagó
+create table if not exists shared_expense_shares (
+  id uuid primary key default gen_random_uuid(),
+  expense_id uuid not null references shared_expenses(id) on delete cascade,
+  member_id uuid not null references finance_members(id) on delete cascade,
+  installment_no integer not null,
+  due_date date not null,
+  amount integer not null,
+  paid_at timestamptz,
+  paid_marked_by text,
+  unique (expense_id, member_id, installment_no)
+);
+create index if not exists shared_expense_shares_member_idx on shared_expense_shares(member_id);
+
+-- Sistema 2: caja (cuotas mensuales + gastos de la caja)
+create table if not exists treasury_settings (
+  project_id uuid primary key references projects(id) on delete cascade,
+  monthly_fee integer not null default 5000,
+  start_month date not null default date_trunc('month', current_date)::date,
+  opening_balance integer not null default 0,
+  opening_note text,
+  updated_at timestamptz not null default now()
+);
+
+-- Un check = una cuota pagada por un integrante en un mes
+create table if not exists treasury_fee_checks (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects(id) on delete cascade,
+  member_id uuid not null references finance_members(id) on delete cascade,
+  month date not null,
+  amount integer not null,
+  checked_by text,
+  checked_by_name text,
+  checked_at timestamptz not null default now(),
+  unique (member_id, month)
+);
+create index if not exists treasury_fee_checks_project_idx on treasury_fee_checks(project_id);
+
+create table if not exists treasury_expenses (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects(id) on delete cascade,
+  expense_date date not null default current_date,
+  description text not null,
+  amount integer not null check (amount > 0),
+  paid_to text,
+  created_by text,
+  created_by_name text,
+  created_at timestamptz not null default now()
+);
+create index if not exists treasury_expenses_project_idx on treasury_expenses(project_id);
+
+-- Historial de cambios de ambos módulos
+create table if not exists finance_log (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects(id) on delete cascade,
+  module text not null,
+  action text not null,
+  detail text not null,
+  user_id text,
+  user_name text,
+  created_at timestamptz not null default now()
+);
+create index if not exists finance_log_project_idx on finance_log(project_id, created_at desc);

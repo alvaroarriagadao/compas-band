@@ -12,7 +12,7 @@ import {
   useSortable, verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ArrowLeft, Plus, GripVertical, Music, ChevronRight, Edit2, Check, X, Trash2, Copy, CalendarDays, Mic, Disc3 } from 'lucide-react'
+import { ArrowLeft, Plus, GripVertical, Music, ChevronRight, Edit2, Check, X, Trash2, Copy, CalendarDays, Mic, Disc3, Wallet } from 'lucide-react'
 import { db } from '@/lib/db'
 import type { Project, Song, Setlist, Rehearsal } from '@/lib/database.types'
 import { useMetronomeStore, type ClickSound } from '@/stores/metronomeStore'
@@ -292,15 +292,23 @@ export default function ProjectPage() {
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>{project.name}</h1>
             {project.description && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{project.description}</p>}
-            {project.access_code && (
-              <button onClick={copyCode}
-                className="mt-1.5 inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg transition-all"
-                style={{ background: codeCopied ? 'rgba(16,185,129,0.15)' : 'var(--bg-elevated)', color: codeCopied ? 'var(--green)' : 'var(--text-muted)', border: '1px solid var(--border)' }}
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {project.access_code && (
+                <button onClick={copyCode}
+                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg transition-all"
+                  style={{ background: codeCopied ? 'rgba(16,185,129,0.15)' : 'var(--bg-elevated)', color: codeCopied ? 'var(--green)' : 'var(--text-muted)', border: '1px solid var(--border)' }}
+                >
+                  <Copy size={10} />
+                  {codeCopied ? '¡Copiado!' : `Código: ${project.access_code}`}
+                </button>
+              )}
+              <Link href={`/projects/${id}/finanzas`}
+                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg font-semibold transition-all"
+                style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--accent)', border: '1px solid rgba(245,158,11,0.3)' }}
               >
-                <Copy size={10} />
-                {codeCopied ? '¡Copiado!' : `Código: ${project.access_code}`}
-              </button>
-            )}
+                <Wallet size={10} /> Finanzas
+              </Link>
+            </div>
           </div>
         </div>
 

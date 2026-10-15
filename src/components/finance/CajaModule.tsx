@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Check, Plus, Trash2, Settings2, X } from 'lucide-react'
-import { Card, Btn, Input, Stat, SectionTitle, Empty, Avatar } from './ui'
+import { Card, Btn, Input, SectionTitle, Empty, Avatar } from './ui'
 import { type FinanceSnapshot, type MonthState, type DebtLevel, fmtCLP, dateLabel, monthLabel, monthKey, todayStr, treasurySummary, monthStatus, yearSummary, DEBT_HIGH_MONTHS } from '@/lib/finance'
 import type { Act } from './GastosModule'
 
@@ -22,16 +22,26 @@ export function CajaModule({ snap, canEdit, act }: Props) {
 
   return (
     <div>
-      <div className="mt-2 grid grid-cols-1 gap-2">
-        <Stat label="Saldo en caja" value={fmtCLP(summary.balance)} color={summary.balance >= 0 ? 'var(--green)' : 'var(--red)'} big />
-        <div className="grid grid-cols-2 gap-2">
-          <Stat label="Saldo inicial" value={fmtCLP(s.opening_balance)} />
-          <Stat label="Cuotas nuevas" value={`+${fmtCLP(summary.feesCollected)}`} color="var(--green)" />
-          <Stat label="Gastos" value={`-${fmtCLP(summary.expensesTotal)}`} color="var(--red)" />
-          <Stat label="Por cobrar" value={fmtCLP(summary.receivable)} color={summary.receivable > 0 ? 'var(--accent)' : 'var(--green)'} />
+      <Card className="mt-2" style={{ padding: 14 }}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Saldo en caja</p>
+            <p className="text-3xl font-black tabular-nums leading-tight" style={{ color: summary.balance >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtCLP(summary.balance)}</p>
+          </div>
+          {summary.receivable > 0 && (
+            <div className="text-right">
+              <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Por cobrar</p>
+              <p className="text-base font-black tabular-nums leading-tight" style={{ color: 'var(--accent)' }}>{fmtCLP(summary.receivable)}</p>
+            </div>
+          )}
         </div>
-      </div>
-      {s.opening_note && <p className="text-[10px] mt-1.5 px-1 leading-relaxed" style={{ color: 'var(--text-muted)' }}>{s.opening_note}</p>}
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-2 text-[11px] tabular-nums" style={{ color: 'var(--text-muted)' }}>
+          <span>Inicial <b style={{ color: 'var(--text-secondary)' }}>{fmtCLP(s.opening_balance)}</b></span>
+          <span>Cuotas <b style={{ color: 'var(--green)' }}>+{fmtCLP(summary.feesCollected)}</b></span>
+          <span>Gastos <b style={{ color: 'var(--red)' }}>−{fmtCLP(summary.expensesTotal)}</b></span>
+        </div>
+        {s.opening_note && <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>{s.opening_note}</p>}
+      </Card>
 
       {active.length === 0 ? (
         <Empty emoji="👥" text="Agrega integrantes para llevar las cuotas mensuales." />
@@ -125,29 +135,29 @@ function AnnualGrid({ snap, year, today, summary, onPick }: {
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Pagado {year}</p>
-            <p className="text-lg font-black tabular-nums leading-tight" style={{ color: 'var(--text-primary)' }}>{fmtCLP(ys.collected)}</p>
+            <p className="text-base font-black tabular-nums leading-tight" style={{ color: 'var(--text-primary)' }}>{fmtCLP(ys.collected)}</p>
             <p className="text-[10px] tabular-nums" style={{ color: 'var(--text-muted)' }}>de {fmtCLP(ys.expected)} esperado a la fecha</p>
           </div>
           {ys.owed > 0 && (
             <div className="text-right">
               <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Atraso</p>
-              <p className="text-lg font-black tabular-nums leading-tight" style={{ color: 'var(--red)' }}>{fmtCLP(ys.owed)}</p>
+              <p className="text-base font-black tabular-nums leading-tight" style={{ color: 'var(--red)' }}>{fmtCLP(ys.owed)}</p>
             </div>
           )}
         </div>
-        <div className="mt-1.5 h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
+        <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
           <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct >= 100 ? 'var(--green)' : 'linear-gradient(90deg, var(--green), var(--accent))' }} />
         </div>
       </div>
 
       {/* Grilla tipo Excel: integrantes × meses */}
-      <div className="grid gap-[3px] items-center grid-cols-[76px_repeat(12,minmax(0,1fr))] sm:grid-cols-[130px_repeat(12,minmax(0,1fr))]">
+      <div className="grid w-fit mx-auto items-center gap-[2px] sm:gap-1 grid-cols-[minmax(0,84px)_repeat(12,18px)] sm:grid-cols-[150px_repeat(12,26px)]">
         <div />
         {MES_LETRA.map((l, i) => {
           const key = `${year}-${String(i + 1).padStart(2, '0')}`
           return (
-            <div key={key} className="text-center text-[10px] font-bold pb-0.5" style={{ color: key === currentKey ? 'var(--accent)' : 'var(--text-muted)' }}>
-              <span className="sm:hidden">{l}</span><span className="hidden sm:inline">{MESES_CORTOS[i]}</span>
+            <div key={key} className="text-center text-[9px] sm:text-[10px] font-bold" style={{ color: key === currentKey ? 'var(--accent)' : 'var(--text-muted)' }}>
+              {l}
             </div>
           )
         })}
@@ -157,12 +167,15 @@ function AnnualGrid({ snap, year, today, summary, onPick }: {
           const lv = LEVEL_STYLE[pm.level]
           return (
             <Row key={m.id}>
-              <div className="rounded-lg px-1.5 sm:px-2 py-1 mr-0.5 sm:mr-1 min-w-0" style={{ background: lv.bg, border: `1px solid ${lv.border}` }}>
-                <p className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>{m.name}</p>
+              <div className="flex items-center gap-1.5 min-w-0 pr-1.5">
+                <span className="w-1.5 h-6 sm:h-7 rounded-full flex-shrink-0" style={{ background: lv.color }} />
+                <div className="min-w-0">
+                <p className="text-[11px] sm:text-xs font-bold truncate leading-tight" style={{ color: 'var(--text-primary)' }}>{m.name}</p>
                 <p className="text-[9px] sm:text-[10px] font-bold truncate tabular-nums" style={{ color: lv.color }}>
                   <span className="sm:hidden">{pm.pendingAmount ? `−${fmtCLP(pm.pendingAmount)}` : 'Al día'}</span>
                   <span className="hidden sm:inline">{lv.label(pm.pendingAmount)}</span>
                 </p>
+                </div>
               </div>
               {Array.from({ length: 12 }, (_, i) => {
                 const key = `${year}-${String(i + 1).padStart(2, '0')}`
@@ -171,12 +184,10 @@ function AnnualGrid({ snap, year, today, summary, onPick }: {
                 const partialPct = st.state === 'partial' ? Math.round((st.paid / Math.max(1, st.due)) * 100) : 0
                 return (
                   <button key={key} disabled={st.state === 'off'} onClick={() => onPick(m.id, key)} title={`${m.name} · ${monthLabel(key)}`}
-                    className="relative h-9 sm:h-10 rounded-md overflow-hidden flex items-center justify-center transition-transform active:scale-90"
-                    style={{ background: c.bg, border: `1px ${st.state === 'off' ? 'dashed' : 'solid'} ${c.border}`, outline: key === currentKey ? '1px solid var(--accent)' : 'none', outlineOffset: 1 }}>
+                    className="relative w-[18px] h-[18px] sm:w-[26px] sm:h-[26px] rounded-[4px] sm:rounded-md overflow-hidden flex items-center justify-center transition-transform hover:scale-110 active:scale-90"
+                    style={{ background: c.bg, border: `1px ${st.state === 'off' ? 'dashed' : 'solid'} ${c.border}`, boxShadow: key === currentKey ? '0 0 0 1.5px var(--accent)' : 'none' }}>
                     {st.state === 'partial' && <span className="absolute bottom-0 left-0 right-0" style={{ height: `${partialPct}%`, background: 'rgba(245,158,11,0.45)' }} />}
-                    <span className="relative text-[11px] font-black leading-none" style={{ color: c.color }}>
-                      {st.state === 'paid' ? '✓' : st.state === 'partial' ? '½' : ''}
-                    </span>
+                    {st.state === 'paid' && <span className="relative text-[9px] sm:text-[11px] font-black leading-none" style={{ color: c.color }}>✓</span>}
                   </button>
                 )
               })}
@@ -185,11 +196,11 @@ function AnnualGrid({ snap, year, today, summary, onPick }: {
         })}
 
         {/* Totales por mes, como la fila de suma del Excel */}
-        <div className="text-[9px] sm:text-[10px] font-bold pt-1.5 pr-1 leading-tight" style={{ color: 'var(--text-muted)' }}>Total mes<br className="sm:hidden" /><span className="sm:hidden"> (miles)</span></div>
+        <div className="text-[9px] sm:text-[10px] font-bold pt-1 pr-1 leading-tight truncate" style={{ color: 'var(--text-muted)' }}>Total (miles)</div>
         {ys.months.map(mo => (
-          <div key={mo.key} className="text-center pt-1.5 text-[9px] sm:text-[10px] font-bold tabular-nums leading-tight"
+          <div key={mo.key} className="text-center pt-1 text-[8px] sm:text-[10px] font-bold tabular-nums leading-tight"
             style={{ color: mo.due === 0 ? 'var(--text-muted)' : mo.paid >= mo.due ? 'var(--green)' : 'var(--text-secondary)' }}>
-            {mo.paid ? <>{Math.round(mo.paid / 1000)}<span className="hidden sm:inline">k</span></> : '–'}
+            {mo.paid ? Math.round(mo.paid / 1000) : '·'}
           </div>
         ))}
       </div>
@@ -198,7 +209,7 @@ function AnnualGrid({ snap, year, today, summary, onPick }: {
       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3">
         {(['paid', 'partial', 'pending', 'future'] as const).map(st => (
           <span key={st} className="inline-flex items-center gap-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-            <span className="w-3 h-3 rounded-sm" style={{ background: STATE_STYLE[st].bg, border: `1px solid ${STATE_STYLE[st].border}` }} />
+            <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: STATE_STYLE[st].bg, border: `1px solid ${STATE_STYLE[st].border}` }} />
             {STATE_STYLE[st].label}
           </span>
         ))}
@@ -214,8 +225,6 @@ function AnnualGrid({ snap, year, today, summary, onPick }: {
 function Row({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
-
-const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
 const STATE_STYLE: Record<MonthState, { bg: string; border: string; color: string; label: string }> = {
   paid:    { bg: 'rgba(16,185,129,0.18)', border: 'rgba(16,185,129,0.45)', color: 'var(--green)', label: 'Pagado' },

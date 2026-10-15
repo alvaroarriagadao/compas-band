@@ -209,6 +209,21 @@ export async function POST(request: Request) {
         break
       }
 
+      case 'shares.pay': {
+        const ids = Array.isArray(body.share_ids) ? body.share_ids.filter(isUuid) : []
+        if (!ids.length || ids.length > 100) throw bad('Cuotas inválidas')
+        const rows = await q(
+          `update shared_expense_shares s set paid_at = now(), paid_marked_by = $1
+           from shared_expenses e, finance_members d, finance_members p
+           where s.id = any($2) and s.paid_at is null and e.id = s.expense_id and e.project_id = $3 and d.id = s.member_id and p.id = e.paid_by
+           returning s.amount, d.name as debtor, p.name as payer, e.description`,
+          [actor.name, ids, projectId])
+        if (!rows.length) throw bad('No había cuotas pendientes para marcar')
+        const total = rows.reduce((a, r) => a + (r.amount as number), 0)
+        const descs = [...new Set(rows.map(r => `"${r.description}"`))].join(', ')
+        await log(projectId, 'gastos', 'shares.paid', `Marcó pagadas ${rows.length} cuota${rows.length > 1 ? 's' : ''}: ${rows[0].debtor} → ${rows[0].payer} ${fmt(total)} (${descs})`, actor)
+        break
+      }
       // ----- caja -----
       case 'treasury.settings': {
         const fee = toInt(body.monthly_fee, 'Cuota mensual')

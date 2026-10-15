@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from 'react'
 import { Plus, Check, ChevronDown, ChevronUp, Trash2, Minus, X } from 'lucide-react'
-import { Card, Btn, Input, Chip, Stat, SectionTitle, Empty, Avatar } from './ui'
+import { Card, Btn, Input, Chip, SectionTitle, Empty, Avatar } from './ui'
 import {
-  type FinanceSnapshot, type ShareItem, fmtCLP, dateLabel, monthLabel, todayStr, addMonths,
+  type FinanceSnapshot, type ShareItem, type PersonBalance, fmtCLP, dateLabel, monthLabel, monthKey, todayStr, addMonths,
   memberSummary, expenseProgress, installmentAmounts, allShareItems,
 } from '@/lib/finance'
 
@@ -27,57 +27,29 @@ export function GastosModule({ snap, canEdit, viewerId, act }: Props) {
       {/* Resumen personal */}
       {summary && viewer && (
         <>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <Stat label="Debes" value={fmtCLP(summary.iOwe)} color={summary.iOwe > 0 ? 'var(--red)' : 'var(--green)'} />
-            <Stat label="Te deben" value={fmtCLP(summary.owedToMe)} color={summary.owedToMe > 0 ? 'var(--green)' : 'var(--text-secondary)'} />
-          </div>
-
-          {summary.byPerson.length > 0 && (
-            <>
-              <SectionTitle>Con cada persona</SectionTitle>
-              <Card className="divide-y" style={{ padding: 0 }}>
-                {summary.byPerson.map(p => (
-                  <div key={p.member.id} className="flex items-center gap-3 px-4 py-3" style={{ borderColor: 'var(--border)' }}>
-                    <Avatar name={p.member.name} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{p.member.name}</p>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        {p.iOwe > 0 && <>Le debes {fmtCLP(p.iOwe)}</>}
-                        {p.iOwe > 0 && p.owesMe > 0 && ' · '}
-                        {p.owesMe > 0 && <>Te debe {fmtCLP(p.owesMe)}</>}
-                      </p>
-                    </div>
-                    <span className="text-sm font-black tabular-nums" style={{ color: p.net < 0 ? 'var(--red)' : 'var(--green)' }}>
-                      {p.net < 0 ? `-${fmtCLP(-p.net)}` : `+${fmtCLP(p.net)}`}
-                    </span>
-                  </div>
-                ))}
-              </Card>
-            </>
-          )}
-
-          <SectionTitle>Qué tienes que pagar</SectionTitle>
-          {summary.byMonth.length === 0 ? (
-            <Card><p className="text-sm text-center py-2" style={{ color: 'var(--green)' }}>✓ Estás al día, no debes nada</p></Card>
-          ) : summary.byMonth.map(group => (
-            <div key={group.key} className="mb-3">
-              <div className="flex items-center justify-between px-1 mb-1.5">
-                <span className="text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>{monthLabel(group.key)}</span>
-                <span className="text-xs font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>{fmtCLP(group.total)}</span>
+          <Card className="mt-2" style={{ padding: 14 }}>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Debes</p>
+                <p className="text-2xl font-black tabular-nums leading-tight" style={{ color: summary.iOwe > 0 ? 'var(--red)' : 'var(--green)' }}>{fmtCLP(summary.iOwe)}</p>
               </div>
-              <Card style={{ padding: 0 }} className="divide-y">
-                {group.items.map(i => <ShareRow key={i.share.id} item={i} mode="pay" canEdit={canEdit} act={act} />)}
-              </Card>
+              <div className="text-right">
+                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Te deben</p>
+                <p className="text-2xl font-black tabular-nums leading-tight" style={{ color: summary.owedToMe > 0 ? 'var(--green)' : 'var(--text-secondary)' }}>{fmtCLP(summary.owedToMe)}</p>
+              </div>
             </div>
-          ))}
+            <ThisMonthLine summary={summary} />
+          </Card>
 
-          {summary.incoming.length > 0 && (
-            <>
-              <SectionTitle>Te deben</SectionTitle>
-              <Card style={{ padding: 0 }} className="divide-y">
-                {summary.incoming.map(i => <ShareRow key={i.share.id} item={i} mode="receive" canEdit={canEdit} act={act} />)}
-              </Card>
-            </>
+          <SectionTitle>Por persona</SectionTitle>
+          {summary.byPerson.length === 0 ? (
+            <Card><p className="text-sm text-center py-1" style={{ color: 'var(--green)' }}>✓ Estás al día con todos</p></Card>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {summary.byPerson.map(p => (
+                <PersonCard key={p.member.id} snap={snap} me={viewer.id} person={p} canEdit={canEdit} act={act} />
+              ))}
+            </div>
           )}
         </>
       )}
@@ -98,28 +70,123 @@ export function GastosModule({ snap, canEdit, viewerId, act }: Props) {
   )
 }
 
-function ShareRow({ item, mode, canEdit, act }: { item: ShareItem; mode: 'pay' | 'receive'; canEdit: boolean; act: Act }) {
-  const { share, expense, payer, debtor } = item
-  const [busy, setBusy] = useState(false)
-  const overdue = !share.paid_at && share.due_date < todayStr()
-  const toggle = async () => { setBusy(true); await act('share.toggle', { share_id: share.id, paid: !share.paid_at }); setBusy(false) }
+function ThisMonthLine({ summary }: { summary: ReturnType<typeof memberSummary> }) {
+  const key = monthKey(todayStr())
+  const pay = summary.pending.filter(i => monthKey(i.share.due_date) <= key).reduce((a, i) => a + i.share.amount, 0)
+  const get = summary.incoming.filter(i => monthKey(i.share.due_date) <= key).reduce((a, i) => a + i.share.amount, 0)
+  if (!pay && !get) return null
   return (
-    <div className="flex items-center gap-3 px-4 py-3" style={{ borderColor: 'var(--border)' }}>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{expense.description}</p>
-        <p className="text-xs" style={{ color: overdue ? 'var(--red)' : 'var(--text-muted)' }}>
-          {mode === 'pay' ? `a ${payer.name}` : `${debtor.name}`}
-          {expense.installments > 1 && ` · cuota ${share.installment_no}/${expense.installments}`}
-          {' · '}{overdue ? 'venció el ' : 'vence '}{dateLabel(share.due_date)}
-        </p>
+    <p className="text-[11px] mt-2 pt-2" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
+      Vencido a {monthLabel(key).toLowerCase()}:{' '}
+      {pay > 0 && <>pagas <b style={{ color: 'var(--red)' }}>{fmtCLP(pay)}</b></>}
+      {pay > 0 && get > 0 && ' · '}
+      {get > 0 && <>recibes <b style={{ color: 'var(--green)' }}>{fmtCLP(get)}</b></>}
+    </p>
+  )
+}
+
+/** Una tarjeta por persona: total neto y, al abrir, cada gasto en una línea con sus cuotas como botones. */
+function PersonCard({ snap, me, person, canEdit, act }: { snap: FinanceSnapshot; me: string; person: PersonBalance; canEdit: boolean; act: Act }) {
+  const [open, setOpen] = useState(false)
+  const items = useMemo(() => allShareItems(snap), [snap])
+  const owesMe = items.filter(i => i.debtor.id === person.member.id && i.payer.id === me)
+  const iOwe = items.filter(i => i.debtor.id === me && i.payer.id === person.member.id)
+  const net = person.net
+  const nextDue = [...owesMe, ...iOwe].filter(i => !i.share.paid_at).sort((x, y) => x.share.due_date.localeCompare(y.share.due_date))[0]
+
+  return (
+    <Card style={{ padding: 0 }}>
+      <button className="w-full flex items-center gap-3 px-3.5 py-3 text-left" onClick={() => setOpen(!open)}>
+        <Avatar name={person.member.name} size={32} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{person.member.name}</p>
+          <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>
+            {person.owesMe > 0 && person.iOwe > 0
+              ? <>te debe <b style={{ color: 'var(--green)' }}>{fmtCLP(person.owesMe)}</b> · le debes <b style={{ color: 'var(--red)' }}>{fmtCLP(person.iOwe)}</b></>
+              : nextDue && <>Próxima: {dateLabel(nextDue.share.due_date).split(' ').slice(0, 2).join(' ')} · {fmtCLP(nextDue.share.amount)}</>}
+          </p>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <p className="text-base font-black tabular-nums" style={{ color: net < 0 ? 'var(--red)' : 'var(--green)' }}>{net < 0 ? '−' : '+'}{fmtCLP(Math.abs(net))}</p>
+          <p className="text-[9px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>{net < 0 ? 'pagas' : 'recibes'}</p>
+        </div>
+        <span style={{ color: 'var(--text-muted)' }}>{open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</span>
+      </button>
+      {open && (
+        <div className="px-3.5 pb-3.5" style={{ borderTop: '1px solid var(--border)' }}>
+          {owesMe.some(i => !i.share.paid_at) && <DebtBlock title={`${person.member.name} te debe`} items={owesMe} canEdit={canEdit} act={act} color="var(--green)" />}
+          {iOwe.some(i => !i.share.paid_at) && <DebtBlock title={`Le debes a ${person.member.name}`} items={iOwe} canEdit={canEdit} act={act} color="var(--red)" />}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function DebtBlock({ title, items, canEdit, act, color }: { title: string; items: ShareItem[]; canEdit: boolean; act: Act; color: string }) {
+  const [busy, setBusy] = useState(false)
+  const today = todayStr()
+  const currentKey = monthKey(today)
+  const byExpense = new Map<string, ShareItem[]>()
+  for (const i of items) byExpense.set(i.expense.id, [...(byExpense.get(i.expense.id) || []), i])
+  const groups = [...byExpense.values()]
+    .filter(xs => xs.some(i => !i.share.paid_at))
+    .sort((x, y) => x[0].expense.expense_date.localeCompare(y[0].expense.expense_date))
+  const dueNow = items.filter(i => !i.share.paid_at && monthKey(i.share.due_date) <= currentKey)
+  const dueNowTotal = dueNow.reduce((a, i) => a + i.share.amount, 0)
+  const pendingTotal = items.filter(i => !i.share.paid_at).reduce((a, i) => a + i.share.amount, 0)
+
+  async function payDueNow() {
+    if (!window.confirm(`¿Marcar como pagadas ${dueNow.length} cuota${dueNow.length > 1 ? 's' : ''} por ${fmtCLP(dueNowTotal)}?`)) return
+    setBusy(true)
+    await act('shares.pay', { share_ids: dueNow.map(i => i.share.id) })
+    setBusy(false)
+  }
+
+  return (
+    <div className="pt-3">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color }}>{title}</p>
+        <p className="text-xs font-black tabular-nums" style={{ color: 'var(--text-primary)' }}>{fmtCLP(pendingTotal)}</p>
       </div>
-      <span className="text-sm font-black tabular-nums" style={{ color: 'var(--text-primary)' }}>{fmtCLP(share.amount)}</span>
-      {canEdit && (
-        <button onClick={toggle} disabled={busy} title={mode === 'pay' ? 'Marcar como pagada' : 'Marcar como recibida'}
-          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
-          style={{ background: share.paid_at ? 'var(--green)' : 'var(--bg-elevated)', border: '1px solid var(--border)', color: share.paid_at ? '#000' : 'var(--text-muted)', opacity: busy ? 0.5 : 1 }}>
-          <Check size={16} />
-        </button>
+      <div className="flex flex-col gap-2">
+        {groups.map(xs => {
+          const e = xs[0].expense
+          const left = xs.filter(i => !i.share.paid_at).reduce((a, i) => a + i.share.amount, 0)
+          return (
+            <div key={e.id} className="rounded-xl px-3 py-2" style={{ background: 'var(--bg-elevated)' }}>
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{e.description}</p>
+                <p className="text-xs font-bold tabular-nums flex-shrink-0" style={{ color: 'var(--text-secondary)' }}>{fmtCLP(left)}</p>
+              </div>
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {xs.sort((x, y) => x.share.installment_no - y.share.installment_no).map(i => {
+                  const paid = !!i.share.paid_at
+                  const overdue = !paid && i.share.due_date < today
+                  return (
+                    <button key={i.share.id} disabled={!canEdit}
+                      onClick={() => act('share.toggle', { share_id: i.share.id, paid: !paid })}
+                      title={paid ? 'Pagada · tocar para desmarcar' : 'Tocar para marcar pagada'}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold tabular-nums transition-transform active:scale-95"
+                      style={{
+                        background: paid ? 'rgba(16,185,129,0.15)' : overdue ? 'rgba(239,68,68,0.12)' : 'var(--bg-card)',
+                        border: `1px solid ${paid ? 'rgba(16,185,129,0.35)' : overdue ? 'rgba(239,68,68,0.35)' : 'var(--border)'}`,
+                        color: paid ? 'var(--green)' : overdue ? 'var(--red)' : 'var(--text-secondary)',
+                        textDecoration: paid ? 'line-through' : 'none',
+                      }}>
+                      {paid ? <Check size={10} /> : <span className="w-2.5 h-2.5 rounded-[3px]" style={{ border: '1.5px solid currentColor' }} />}
+                      {monthLabel(monthKey(i.share.due_date), true).split(' ')[0]} {fmtCLP(i.share.amount)}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {canEdit && dueNow.length > 1 && (
+        <Btn small variant="success" className="w-full mt-2" disabled={busy} onClick={payDueNow}>
+          <Check size={12} /> Marcar todo lo vencido ({fmtCLP(dueNowTotal)})
+        </Btn>
       )}
     </div>
   )

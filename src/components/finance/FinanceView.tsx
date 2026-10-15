@@ -57,12 +57,12 @@ export function FinanceView({ snap, canEdit, viewerId, onPickViewer, act, backHr
             <div className="flex items-center gap-2 mb-4 text-xs" style={{ color: 'var(--text-muted)' }}>
               <Avatar name={viewer.name} size={22} />
               <span>Viendo como <b style={{ color: 'var(--text-primary)' }}>{viewer.name}</b></span>
-              <button className="underline" onClick={() => onPickViewer('')}>cambiar</button>
+              <button className="underline font-semibold" style={{ color: 'var(--accent)' }} onClick={() => onPickViewer('')}>cambiar</button>
             </div>
           ) : (
             <Card className="mb-4" style={{ borderColor: 'var(--border-bright)' }}>
-              <p className="text-sm font-bold mb-2" style={{ color: 'var(--text-primary)' }}>¿Quién eres?</p>
-              <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>Así ves tu resumen: qué debes, a quién y cuánto te deben.</p>
+              <p className="text-sm font-bold mb-2" style={{ color: 'var(--text-primary)' }}>¿De quién quieres ver el resumen?</p>
+              <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>Verás qué debe, a quién y cuánto le deben.</p>
               <div className="flex flex-wrap gap-1.5">
                 {active.map(m => <Chip key={m.id} onClick={() => onPickViewer(m.id)}>{m.name}</Chip>)}
               </div>

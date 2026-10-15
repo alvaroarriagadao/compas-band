@@ -16,6 +16,7 @@ export function FinanceLoader({ query, canEdit, backHref, backLabel, onUnauthori
   const [snap, setSnap] = useState<FinanceSnapshot | null>(null)
   const [error, setError] = useState('')
   const [localViewer, setLocalViewer] = useState<string | null>(null)
+  const [picking, setPicking] = useState(false)
   const qs = query.project ? `project=${query.project}` : `code=${encodeURIComponent(query.code || '')}`
 
   const load = useCallback(async () => {
@@ -24,8 +25,8 @@ export function FinanceLoader({ query, canEdit, backHref, backLabel, onUnauthori
     const json = await res.json()
     if (!res.ok) { setError(json.error || 'Error'); return }
     setSnap(json)
-    try { setLocalViewer(localStorage.getItem(`fin-viewer-${json.project.id}`)) } catch { /* sin storage */ }
-  }, [qs, onUnauthorized])
+    if (!canEdit) { try { setLocalViewer(localStorage.getItem(`fin-viewer-${json.project.id}`)) } catch { /* sin storage */ } }
+  }, [qs, onUnauthorized, canEdit])
 
   // La carga es asíncrona: el estado se actualiza después del fetch, no dentro del efecto.
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -58,20 +59,21 @@ export function FinanceLoader({ query, canEdit, backHref, backLabel, onUnauthori
     )
   }
 
-  // Con sesión: el integrante vinculado a mi cuenta. Sin sesión (enlace público): elección guardada en el dispositivo.
+  // Por defecto: con sesión, el integrante vinculado a mi cuenta; sin sesión, el elegido en este dispositivo.
+  // "cambiar" permite ver el resumen de cualquier integrante.
   const linked = snap.me?.member_id ?? null
-  const viewerId = (linked || localViewer) && snap.members.some(m => m.id === (linked || localViewer)) ? (linked || localViewer) : null
+  const valid = (id: string | null) => (id && snap.members.some(m => m.id === id) ? id : null)
+  const viewerId = picking ? null : (valid(localViewer) ?? valid(linked))
 
   function onPickViewer(memberId: string) {
-    try {
-      if (memberId) localStorage.setItem(`fin-viewer-${snap!.project.id}`, memberId)
-      else localStorage.removeItem(`fin-viewer-${snap!.project.id}`)
-    } catch { /* sin storage */ }
-    setLocalViewer(memberId || null)
-    if (canEdit && memberId && !linked) act('member.claim', { id: memberId })
-    if (canEdit && !memberId && linked) {
-      // "cambiar" con cuenta vinculada: solo permite elegir otra persona si se desvincula manualmente en Integrantes
-      setLocalViewer(null)
+    if (!memberId) { setPicking(true); return }
+    setPicking(false)
+    setLocalViewer(memberId)
+    if (!canEdit) {
+      try { localStorage.setItem(`fin-viewer-${snap!.project.id}`, memberId) } catch { /* sin storage */ }
+    } else if (!linked) {
+      // Primera vez con sesión: vincula mi cuenta a ese integrante
+      act('member.claim', { id: memberId })
     }
   }
 

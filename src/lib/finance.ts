@@ -161,7 +161,34 @@ export interface TreasurySummary {
   expensesTotal: number
   balance: number
   receivable: number          // total adeudado en cuotas
-  perMember: { member: FinMember; paidAmount: number; pending: string[]; pendingAmount: number }[]
+  perMember: { member: FinMember; paidAmount: number; pending: string[]; pendingAmount: number; level: DebtLevel }[]
+}
+
+/** Semáforo de deuda: al día, poco (hasta 2 cuotas) o mucho (más de 2 cuotas). */
+export type DebtLevel = 'ok' | 'low' | 'high'
+export const DEBT_HIGH_MONTHS = 2
+export function debtLevel(pendingAmount: number, fee: number): DebtLevel {
+  if (pendingAmount <= 0) return 'ok'
+  return pendingAmount > DEBT_HIGH_MONTHS * Math.max(1, fee) ? 'high' : 'low'
+}
+
+/** Resumen de un año: lo esperado a la fecha, lo pagado y el total por mes. */
+export function yearSummary(snap: FinanceSnapshot, year: number, today = todayStr()) {
+  const s = snap.treasury.settings
+  const active = snap.members.filter(m => m.active)
+  const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`)
+  const perMonth = months.map(key => {
+    const statuses = active.map(m => monthStatus(snap, m.id, key, today))
+    return {
+      key,
+      paid: statuses.reduce((a, st) => a + st.paid, 0),
+      paidCount: statuses.filter(st => st.state === 'paid').length,
+      due: statuses.some(st => st.state !== 'off' && st.state !== 'future') ? active.length * s.monthly_fee : 0,
+    }
+  })
+  const collected = perMonth.reduce((a, m) => a + m.paid, 0)
+  const expected = perMonth.reduce((a, m) => a + m.due, 0)
+  return { months: perMonth, collected, expected, owed: Math.max(0, expected - collected), yearTotal: active.length * s.monthly_fee * 12 }
 }
 
 /** Estado de un mes para un integrante. Un mes se paga con uno o más pagos (parciales) hasta llegar a la cuota. */
@@ -196,6 +223,7 @@ export function treasurySummary(snap: FinanceSnapshot, today = todayStr()): Trea
       paidAmount: checks.filter(c => c.member_id === member.id).reduce((a, c) => a + c.amount, 0),
       pending: pendingStatuses.map(st => st.key),
       pendingAmount: pendingStatuses.reduce((a, st) => a + st.remaining, 0),
+      level: debtLevel(pendingStatuses.reduce((a, st) => a + st.remaining, 0), s.monthly_fee),
     }
   })
   const receivable = perMember.reduce((a, p) => a + p.pendingAmount, 0)

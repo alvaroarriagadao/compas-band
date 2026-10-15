@@ -1,6 +1,6 @@
 // Pruebas de los cálculos puros de Finanzas. Uso: npx tsx scripts/test-finance.mts
 import assert from 'node:assert/strict'
-import { splitExpense, installmentAmounts, memberSummary, treasurySummary, monthStatus, addMonths, monthsBetween, type FinanceSnapshot, type FeeCheck } from '../src/lib/finance'
+import { splitExpense, installmentAmounts, memberSummary, treasurySummary, monthStatus, yearSummary, addMonths, monthsBetween, type FinanceSnapshot, type FeeCheck } from '../src/lib/finance'
 
 // Reparto: 70.000 entre 4 (Alvaro paga) en 3 cuotas
 const rows = splitExpense(70000, ['seb', 'nacho', 'tutu'], ['2026-10-24', '2026-11-24', '2026-12-24'])
@@ -64,6 +64,10 @@ assert.equal(k.historicalFees, 136000, 'cuadra con Total Cuotas 2026 del Excel')
 assert.equal(k.balance, 30158, 'el Excel no se suma dos veces')
 assert.deepEqual(k.perMember.map(p => [p.member.name, p.pendingAmount]),
   [['Alvaro', 5000], ['Sebastian', 10000], ['Nacho', 4000 + 8 * 5000], ['Tutu', 5000]], 'deudas al 15 oct: nadie queda perdonado')
+assert.deepEqual(k.perMember.map(p => [p.member.name, p.level]), [['Alvaro', 'low'], ['Sebastian', 'low'], ['Nacho', 'high'], ['Tutu', 'low']], 'semáforo')
+const y = yearSummary(kb, 2026, '2026-10-15')
+assert.equal(y.collected, 136000); assert.equal(y.expected, 10 * 4 * 5000); assert.equal(y.owed, 64000)
+assert.deepEqual(y.months.slice(0, 3).map(m => m.paid), [20000, 16000, 15000])
 assert.equal(monthStatus(kb, 'nacho', '2026-02', '2026-10-15').state, 'partial')
 assert.equal(monthStatus(kb, 'nacho', '2026-02', '2026-10-15').remaining, 4000)
 assert.equal(monthStatus(kb, 'nacho', '2026-11', '2026-10-15').state, 'future')

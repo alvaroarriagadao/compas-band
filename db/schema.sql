@@ -239,3 +239,6 @@ create index if not exists finance_log_project_idx on finance_log(project_id, cr
 alter table treasury_fee_checks add column if not exists historical boolean not null default false;
 alter table treasury_fee_checks drop constraint if exists treasury_fee_checks_member_id_month_key;
 create index if not exists treasury_fee_checks_member_month_idx on treasury_fee_checks(member_id, month);
+
+-- v3 gastos: el pagador puede no compartir el gasto (le devuelven el total)
+alter table shared_expenses add column if not exists payer_shares boolean not null default true;

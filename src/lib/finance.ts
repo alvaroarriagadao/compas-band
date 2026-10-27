@@ -5,6 +5,8 @@ export interface FinMember { id: string; project_id: string; name: string; user_
 export interface SharedExpense {
   id: string; project_id: string; paid_by: string; description: string; amount: number; expense_date: string
   installments: number; notes: string | null; created_by_name: string | null; created_at: string
+  /** true: quien pagó pone su parte. false: le devuelven el total. */
+  payer_shares: boolean
 }
 export interface ExpenseShare {
   id: string; expense_id: string; member_id: string; installment_no: number; due_date: string; amount: number
@@ -74,21 +76,29 @@ export function relativeTime(iso: string) {
 }
 
 // ---------- gastos compartidos ----------
-/**
- * Reparte un gasto en partes iguales entre pagador y deudores.
- * El pagador absorbe el redondeo. Cada deudor divide su parte en cuotas (el resto va a la primera).
- * Así cada persona suma exactamente su parte y el total cuadra.
- */
-export function splitExpense(total: number, debtorIds: string[], dueDates: string[]) {
-  const people = debtorIds.length + 1
-  const perPerson = Math.floor(total / people)
-  const k = Math.max(1, dueDates.length)
-  const base = Math.floor(perPerson / k)
-  const rest = perPerson - base * k
-  const rows: { member_id: string; installment_no: number; due_date: string; amount: number }[] = []
-  for (const member_id of debtorIds) {
-    for (let i = 0; i < k; i++) rows.push({ member_id, installment_no: i + 1, due_date: dueDates[i], amount: base + (i < rest ? 1 : 0) })
+/** Parte de cada deudor. Si el pagador comparte, absorbe el redondeo; si no, los pesos sobrantes van a los primeros deudores. */
+export function debtorParts(total: number, debtorCount: number, payerShares = true): number[] {
+  if (debtorCount <= 0) return []
+  if (payerShares) {
+    const per = Math.floor(total / (debtorCount + 1))
+    return Array(debtorCount).fill(per)
   }
+  const base = Math.floor(total / debtorCount), rem = total - base * debtorCount
+  return Array.from({ length: debtorCount }, (_, i) => base + (i < rem ? 1 : 0))
+}
+
+/**
+ * Reparte un gasto en partes iguales. Cada deudor divide su parte en cuotas (los pesos sobrantes van a las primeras).
+ * Si el pagador no comparte el gasto, los deudores le devuelven el total exacto.
+ */
+export function splitExpense(total: number, debtorIds: string[], dueDates: string[], payerShares = true) {
+  const parts = debtorParts(total, debtorIds.length, payerShares)
+  const k = Math.max(1, dueDates.length)
+  const rows: { member_id: string; installment_no: number; due_date: string; amount: number }[] = []
+  debtorIds.forEach((member_id, d) => {
+    const cuotas = installmentAmounts(parts[d], k)
+    for (let i = 0; i < k; i++) rows.push({ member_id, installment_no: i + 1, due_date: dueDates[i], amount: cuotas[i] })
+  })
   return rows
 }
 /** Montos de las cuotas de una persona (para previsualizar). */
@@ -146,8 +156,10 @@ export function expenseProgress(expense: SharedExpense, shares: ExpenseShare[]) 
   const total = mine.reduce((a, s) => a + s.amount, 0)
   const paid = mine.filter(s => s.paid_at).reduce((a, s) => a + s.amount, 0)
   const debtors = new Set(mine.map(s => s.member_id)).size
-  const perPerson = Math.floor(expense.amount / (debtors + 1))
-  return { total, paid, pending: total - paid, debtors, perPerson, done: total > 0 && paid >= total }
+  const payerShares = expense.payer_shares !== false
+  const people = debtors + (payerShares ? 1 : 0)
+  const perPerson = Math.floor(expense.amount / Math.max(1, people))
+  return { total, paid, pending: total - paid, debtors, people, payerShares, perPerson, done: total > 0 && paid >= total }
 }
 
 // ---------- caja ----------

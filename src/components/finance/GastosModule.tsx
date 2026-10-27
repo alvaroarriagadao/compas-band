@@ -5,7 +5,7 @@ import { Plus, Check, ChevronDown, ChevronUp, Trash2, Minus, X } from 'lucide-re
 import { Card, Btn, Input, Chip, SectionTitle, Empty, Avatar } from './ui'
 import {
   type FinanceSnapshot, type ShareItem, type PersonBalance, fmtCLP, dateLabel, monthLabel, monthKey, todayStr, addMonths,
-  memberSummary, expenseProgress, installmentAmounts, allShareItems,
+  memberSummary, expenseProgress, installmentAmounts, debtorParts, allShareItems,
 } from '@/lib/finance'
 
 export type Act = (action: string, payload: Record<string, unknown>) => Promise<boolean>
@@ -211,9 +211,11 @@ function ExpenseCard({ snap, expenseId, canEdit, act }: { snap: FinanceSnapshot;
             <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{expense.description}</p>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
               Pagó <b style={{ color: 'var(--text-secondary)' }}>{payer?.name}</b> · {dateLabel(expense.expense_date)}
-              {expense.installments > 1 && ` · ${expense.installments} cuotas`} · {progress.debtors + 1} personas
+              {expense.installments > 1 && ` · ${expense.installments} cuotas`} · {progress.people} persona{progress.people > 1 ? 's' : ''}
             </p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Cada uno aporta {fmtCLP(progress.perPerson)}</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              {progress.payerShares ? `Cada uno aporta ${fmtCLP(progress.perPerson)}` : `Le devuelven el total a ${payer?.name}`}
+            </p>
           </div>
           <div className="text-right flex-shrink-0">
             <p className="text-base font-black tabular-nums" style={{ color: 'var(--text-primary)' }}>{fmtCLP(expense.amount)}</p>
@@ -255,7 +257,7 @@ function ExpenseCard({ snap, expenseId, canEdit, act }: { snap: FinanceSnapshot;
             </div>
           ))}
           <p className="text-[10px] mb-3" style={{ color: 'var(--text-muted)' }}>
-            {payer?.name} pone su parte ({fmtCLP(expense.amount - progress.total)}) y recibe el resto.
+            {progress.payerShares ? `${payer?.name} pone su parte (${fmtCLP(expense.amount - progress.total)}) y recibe el resto.` : `${payer?.name} no comparte este gasto: recibe los ${fmtCLP(progress.total)} completos.`}
             {expense.created_by_name && ` Registrado por ${expense.created_by_name}.`}
           </p>
           {canEdit && (
@@ -283,8 +285,12 @@ function NewExpenseForm({ snap, viewerId, act, onClose }: { snap: FinanceSnapsho
 
   const amount = Math.round(Number(amountText.replace(/\D/g, '')) || 0)
   const debtors = participants.filter(id => id !== paidBy)
-  const perPerson = debtors.length ? Math.floor(amount / (debtors.length + 1)) : 0
+  const payerShares = participants.includes(paidBy)
+  const parts = debtorParts(amount, debtors.length, payerShares)
+  const perPerson = parts[0] ?? 0
+  const toPayer = parts.reduce((a, x) => a + x, 0)
   const cuotas = installmentAmounts(perPerson, dueDates.length)
+  const payerName = active.find(m => m.id === paidBy)?.name
 
   function setInstallments(k: number) {
     k = Math.max(1, Math.min(12, k))
@@ -299,7 +305,7 @@ function NewExpenseForm({ snap, viewerId, act, onClose }: { snap: FinanceSnapsho
     setError('')
     if (!description.trim()) return setError('Escribe de qué es el gasto')
     if (amount <= 0) return setError('Ingresa el monto')
-    if (!debtors.length) return setError('Elige al menos una persona más que comparta el gasto')
+    if (!debtors.length) return setError('Elige al menos una persona que le deba a quien pagó')
     setSaving(true)
     const ok = await act('expense.create', { paid_by: paidBy, description: description.trim(), amount, expense_date: date, due_dates: dueDates, participant_ids: participants, notes: notes.trim() || null })
     setSaving(false)
@@ -325,14 +331,19 @@ function NewExpenseForm({ snap, viewerId, act, onClose }: { snap: FinanceSnapsho
           <Input label="Fecha del gasto" type="date" value={date} onChange={e => { setDate(e.target.value); if (e.target.value) regenerateFrom(e.target.value) }} />
         </div>
         <div>
-          <span className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--text-muted)' }}>¿Quiénes lo comparten? (en partes iguales)</span>
+          <span className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--text-muted)' }}>¿Entre quiénes se reparte? (partes iguales)</span>
           <div className="flex flex-wrap gap-1.5">
             {active.map(m => (
-              <Chip key={m.id} active={participants.includes(m.id)} disabled={m.id === paidBy} onClick={() => toggleParticipant(m.id)} color="var(--green)">
+              <Chip key={m.id} active={participants.includes(m.id)} onClick={() => toggleParticipant(m.id)} color="var(--green)">
                 {m.name}{m.id === paidBy ? ' (pagó)' : ''}
               </Chip>
             ))}
           </div>
+          <p className="text-[10px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
+            {payerShares
+              ? `${payerName} pone su parte. Desmárcalo si el gasto no es suyo y le deben devolver todo.`
+              : `${payerName} no comparte el gasto: le devuelven el total.`}
+          </p>
         </div>
         <div>
           <div className="flex items-center justify-between mb-1.5">
@@ -358,9 +369,11 @@ function NewExpenseForm({ snap, viewerId, act, onClose }: { snap: FinanceSnapsho
 
         {amount > 0 && debtors.length > 0 && (
           <div className="rounded-xl px-3.5 py-3 text-xs leading-relaxed" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', color: 'var(--text-secondary)' }}>
-            <b style={{ color: 'var(--text-primary)' }}>{fmtCLP(amount)}</b> entre {debtors.length + 1} personas → cada uno aporta <b style={{ color: 'var(--text-primary)' }}>{fmtCLP(perPerson)}</b>
+            {payerShares
+              ? <><b style={{ color: 'var(--text-primary)' }}>{fmtCLP(amount)}</b> entre {debtors.length + 1} personas → cada uno aporta <b style={{ color: 'var(--text-primary)' }}>{fmtCLP(perPerson)}</b></>
+              : <><b style={{ color: 'var(--text-primary)' }}>{fmtCLP(amount)}</b> {debtors.length > 1 ? `entre ${debtors.length} personas → cada una devuelve` : `→ ${active.find(m => m.id === debtors[0])?.name} devuelve`} <b style={{ color: 'var(--text-primary)' }}>{fmtCLP(perPerson)}</b></>}
             {dueDates.length > 1 && <> en cuotas de {cuotas.map(fmtCLP).join(', ')}</>}.
-            <br />{active.find(m => m.id === paidBy)?.name} recibirá <b style={{ color: 'var(--green)' }}>{fmtCLP(perPerson * debtors.length)}</b> en total.
+            <br />{payerName} recibirá <b style={{ color: 'var(--green)' }}>{fmtCLP(toPayer)}</b> en total.
           </div>
         )}
         {error && <p className="text-xs" style={{ color: 'var(--red)' }}>{error}</p>}

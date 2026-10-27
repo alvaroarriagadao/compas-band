@@ -1,6 +1,6 @@
 // Pruebas de los cálculos puros de Finanzas. Uso: npx tsx scripts/test-finance.mts
 import assert from 'node:assert/strict'
-import { splitExpense, installmentAmounts, memberSummary, treasurySummary, monthStatus, yearSummary, addMonths, monthsBetween, type FinanceSnapshot, type FeeCheck } from '../src/lib/finance'
+import { splitExpense, debtorParts, expenseProgress, installmentAmounts, memberSummary, treasurySummary, monthStatus, yearSummary, addMonths, monthsBetween, type FinanceSnapshot, type FeeCheck } from '../src/lib/finance'
 
 // Reparto: 70.000 entre 4 (Alvaro paga) en 3 cuotas
 const rows = splitExpense(70000, ['seb', 'nacho', 'tutu'], ['2026-10-24', '2026-11-24', '2026-12-24'])
@@ -14,6 +14,15 @@ const r2 = splitExpense(10000, ['a', 'b'], ['2026-10-01'])
 assert.deepEqual(r2.map(r => r.amount), [3333, 3333])
 assert.deepEqual(installmentAmounts(10000, 3), [3334, 3333, 3333])
 assert.equal(installmentAmounts(10000, 3).reduce((a, b) => a + b, 0), 10000)
+// Pagador que no comparte: Alvaro paga 60.250 por Tutu en 3 cuotas → Tutu devuelve todo
+const solo = splitExpense(60250, ['tutu'], ['2026-10-30', '2026-11-30', '2026-12-30'], false)
+assert.deepEqual(solo.map(r => r.amount), [20084, 20083, 20083])
+assert.equal(solo.reduce((a, r) => a + r.amount, 0), 60250, 'Tutu devuelve el total exacto')
+assert.deepEqual(debtorParts(10001, 2, false), [5001, 5000], 'sin compartir: el total cuadra al peso')
+assert.deepEqual(debtorParts(10001, 2, true), [3333, 3333], 'compartiendo: el pagador absorbe el redondeo')
+const pg = expenseProgress({ id: 'z', project_id: 'p', paid_by: 'alv', description: 'Viaje', amount: 60250, expense_date: '2026-10-30', installments: 3, notes: null, created_by_name: null, created_at: '', payer_shares: false },
+  solo.map((r, i) => ({ id: 'z' + i, expense_id: 'z', ...r, paid_at: null, paid_marked_by: null })))
+assert.equal(pg.people, 1); assert.equal(pg.perPerson, 60250); assert.equal(pg.total, 60250); assert.equal(pg.payerShares, false)
 // Fechas
 assert.equal(addMonths('2026-01-31', 1), '2026-02-28')
 assert.equal(addMonths('2026-12-24', 1), '2027-01-24')
@@ -26,8 +35,8 @@ const snap: FinanceSnapshot = {
   members: [m('alv', 'Alvaro'), m('seb', 'Sebastian'), m('nacho', 'Nacho'), m('tutu', 'Tutu')],
   candidates: [],
   expenses: [
-    { id: 'e1', project_id: 'p', paid_by: 'alv', description: 'Radio', amount: 70000, expense_date: '2026-10-15', installments: 3, notes: null, created_by_name: null, created_at: '' },
-    { id: 'e2', project_id: 'p', paid_by: 'seb', description: 'Pasajes', amount: 20000, expense_date: '2026-10-10', installments: 1, notes: null, created_by_name: null, created_at: '' },
+    { id: 'e1', project_id: 'p', paid_by: 'alv', description: 'Radio', amount: 70000, expense_date: '2026-10-15', installments: 3, notes: null, created_by_name: null, created_at: '', payer_shares: true },
+    { id: 'e2', project_id: 'p', paid_by: 'seb', description: 'Pasajes', amount: 20000, expense_date: '2026-10-10', installments: 1, notes: null, created_by_name: null, created_at: '', payer_shares: true },
   ],
   shares: [
     ...rows.map((r, i) => ({ id: 's' + i, expense_id: 'e1', ...r, paid_at: r.member_id === 'seb' && r.installment_no === 1 ? '2026-10-20T00:00:00Z' : null, paid_marked_by: null })),

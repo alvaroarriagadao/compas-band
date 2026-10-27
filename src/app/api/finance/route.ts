@@ -35,7 +35,7 @@ async function loadSnapshot(projectId: string): Promise<FinanceSnapshot> {
        from (select user_id from project_members where project_id = $1 union select owner_id from projects where id = $1 and owner_id is not null) u
        left join profiles p on p.id = u.user_id
        where u.user_id is not null and u.user_id not in (select user_id from finance_members where project_id = $1 and user_id is not null)`, [projectId]),
-    q('select id, project_id, paid_by, description, amount, expense_date::text, installments, notes, created_by_name, created_at from shared_expenses where project_id = $1 order by expense_date desc, created_at desc', [projectId]),
+    q('select id, project_id, paid_by, description, amount, expense_date::text, installments, notes, created_by_name, created_at, payer_shares from shared_expenses where project_id = $1 order by expense_date desc, created_at desc', [projectId]),
     q('select s.id, s.expense_id, s.member_id, s.installment_no, s.due_date::text, s.amount, s.paid_at, s.paid_marked_by from shared_expense_shares s join shared_expenses e on e.id = s.expense_id where e.project_id = $1', [projectId]),
     q('select project_id, monthly_fee, start_month::text, opening_balance, opening_note from treasury_settings where project_id = $1', [projectId]),
     q('select id, member_id, month::text, amount, historical, checked_by_name, checked_at from treasury_fee_checks where project_id = $1 order by checked_at', [projectId]),
@@ -156,21 +156,23 @@ export async function POST(request: Request) {
         const expenseDate = isDate(body.expense_date) ? body.expense_date : new Date().toISOString().slice(0, 10)
         const dueDates = Array.isArray(body.due_dates) ? body.due_dates.filter(isDate) : []
         if (dueDates.length < 1 || dueDates.length > 36) throw bad('Indica entre 1 y 36 cuotas con fecha')
-        const debtorIds = Array.isArray(body.participant_ids) ? body.participant_ids.filter(isUuid).filter(id => id !== payer.id) : []
-        if (!debtorIds.length) throw bad('Elige al menos una persona que comparta el gasto')
+        const participantIds = Array.isArray(body.participant_ids) ? body.participant_ids.filter(isUuid) : []
+        const payerShares = participantIds.includes(payer.id)
+        const debtorIds = participantIds.filter(id => id !== payer.id)
+        if (!debtorIds.length) throw bad('Elige al menos una persona que le deba a quien pagó')
         const valid = await q('select id from finance_members where project_id = $1 and id = any($2)', [projectId, debtorIds])
         if (valid.length !== debtorIds.length) throw bad('Integrante inválido')
         const notes = body.notes ? String(body.notes).slice(0, 500) : null
         const expenseId = crypto.randomUUID()
-        const shares = splitExpense(amount, debtorIds, dueDates)
+        const shares = splitExpense(amount, debtorIds, dueDates, payerShares)
         const s = sql()
         await s.transaction([
-          s.query('insert into shared_expenses (id, project_id, paid_by, description, amount, expense_date, installments, notes, created_by, created_by_name) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-            [expenseId, projectId, payer.id, description, amount, expenseDate, dueDates.length, notes, actor.id, actor.name]),
+          s.query('insert into shared_expenses (id, project_id, paid_by, description, amount, expense_date, installments, notes, created_by, created_by_name, payer_shares) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+            [expenseId, projectId, payer.id, description, amount, expenseDate, dueDates.length, notes, actor.id, actor.name, payerShares]),
           ...shares.map(sh => s.query('insert into shared_expense_shares (expense_id, member_id, installment_no, due_date, amount) values ($1,$2,$3,$4,$5)',
             [expenseId, sh.member_id, sh.installment_no, sh.due_date, sh.amount])),
         ])
-        await log(projectId, 'gastos', 'expense.create', `Registró "${description}" por ${fmt(amount)}, pagado por ${payer.name}, en ${dueDates.length} cuota${dueDates.length > 1 ? 's' : ''} entre ${debtorIds.length + 1} personas`, actor)
+        await log(projectId, 'gastos', 'expense.create', `Registró "${description}" por ${fmt(amount)}, pagado por ${payer.name}, en ${dueDates.length} cuota${dueDates.length > 1 ? 's' : ''} ${payerShares ? `entre ${debtorIds.length + 1} personas` : `(le devuelven el total ${debtorIds.length} persona${debtorIds.length > 1 ? 's' : ''})`}`, actor)
         break
       }
       case 'expense.update': {

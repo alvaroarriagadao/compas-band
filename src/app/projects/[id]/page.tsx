@@ -275,7 +275,7 @@ export default function ProjectPage() {
 
   return (
     <div className="min-h-screen pb-28" style={{ background: 'var(--bg-base)' }}>
-      <div className="px-4 py-6 max-w-xl mx-auto">
+      <div className="px-4 py-6 max-w-xl mx-auto folder-enter">
         {/* Back */}
         <Link href="/" className="inline-flex items-center gap-1.5 text-sm mb-5 transition-colors" style={{ color: 'var(--text-muted)' }}
           onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'}
@@ -302,32 +302,31 @@ export default function ProjectPage() {
                   {codeCopied ? '¡Copiado!' : `Código: ${project.access_code}`}
                 </button>
               )}
-              <Link href={`/projects/${id}/finanzas`}
-                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg font-semibold transition-all"
-                style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--accent)', border: '1px solid rgba(245,158,11,0.3)' }}
-              >
-                <Wallet size={10} /> Finanzas
-              </Link>
             </div>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 p-1 rounded-2xl mb-5" style={{ background: 'var(--bg-card)' }}>
-          {(['songs', 'setlists', 'ensayos'] as Tab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold transition-all"
-              style={{
-                background: tab === t ? 'var(--bg-elevated)' : 'transparent',
-                color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)',
-              }}
-            >
-              {t === 'songs' && <><Music size={13} /> Canciones <span className="text-xs opacity-60">({songs.length})</span></>}
-              {t === 'setlists' && <><CalendarDays size={13} /> Setlists <span className="text-xs opacity-60">({setlists.length})</span></>}
-              {t === 'ensayos' && <><Mic size={13} /> Ensayos <span className="text-xs opacity-60">({rehearsals.length})</span></>}
-            </button>
-          ))}
-        </div>
+        {/* Separadores de la carpeta */}
+        <nav className="folder-dividers mb-5" aria-label="Secciones de la carpeta">
+          {(['songs', 'setlists', 'ensayos'] as Tab[]).map(t => {
+            const active = tab === t
+            return (
+              <button key={t} onClick={() => setTab(t)} className="folder-divider" aria-current={active ? 'page' : undefined}
+                style={{
+                  background: active ? 'var(--bg-card)' : 'transparent',
+                  borderColor: active ? 'var(--border-bright)' : 'transparent',
+                  color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+                }}>
+                {t === 'songs' && <><Music size={13} /> Canciones <span className="text-[11px] tabular-nums opacity-60">{songs.length}</span></>}
+                {t === 'setlists' && <><CalendarDays size={13} /> Setlists <span className="text-[11px] tabular-nums opacity-60">{setlists.length}</span></>}
+                {t === 'ensayos' && <><Mic size={13} /> Ensayos <span className="text-[11px] tabular-nums opacity-60">{rehearsals.length}</span></>}
+              </button>
+            )
+          })}
+          <Link href={`/projects/${id}/finanzas`} className="folder-divider" style={{ color: 'var(--accent)' }}>
+            <Wallet size={13} /> Finanzas
+          </Link>
+        </nav>
 
         {/* ── SONGS TAB ── */}
         {tab === 'songs' && (

@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, ChevronRight, LogOut, Users, Music2, KeyRound, X, Eye, EyeOff, ShieldCheck } from 'lucide-react'
+import { Plus, LogOut, Users, KeyRound, X, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { PWAInstallButton } from '@/components/PWAInstall'
 import { FirstTimeNameModal } from '@/components/FirstTimeNameModal'
+import { BandFolder, type FolderStats } from '@/components/BandFolder'
 import { db } from '@/lib/db'
 import { signOut, changePassword, generateAccessCode, slugify } from '@/lib/auth'
 import { useAuth } from '@/contexts/AuthContext'
@@ -17,7 +18,7 @@ export default function HomePage() {
   const router = useRouter()
   const { user, loading } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
-  const [visibleCodes, setVisibleCodes] = useState<Set<string>>(new Set())
+  const [folderStats, setFolderStats] = useState<Record<string, FolderStats>>({})
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [profile, setProfile] = useState<{ display_name: string | null; is_active: boolean } | null>(null)
   const [profileLoaded, setProfileLoaded] = useState(false)
@@ -71,6 +72,22 @@ export default function HomePage() {
 
     setProjects(allProjects)
     setFetching(false)
+    loadFolderStats(allProjects.map((p: Project) => p.id))
+  }
+
+  /** Lo que se ve dentro de cada carpeta: canciones (con títulos), setlists y ensayos. */
+  async function loadFolderStats(ids: string[]) {
+    if (!ids.length) return
+    const [songsRes, setlistsRes, rehearsalsRes] = await Promise.all([
+      db.from('songs').select('project_id, title').in('project_id', ids).order('song_order'),
+      db.from('setlists').select('project_id').in('project_id', ids),
+      db.from('rehearsals').select('project_id').in('project_id', ids),
+    ])
+    const stats: Record<string, FolderStats> = Object.fromEntries(ids.map(id => [id, { songs: 0, setlists: 0, rehearsals: 0, titles: [] as string[] }]))
+    for (const s of (songsRes.data || []) as { project_id: string; title: string }[]) { stats[s.project_id].songs++; if (stats[s.project_id].titles.length < 3) stats[s.project_id].titles.push(s.title) }
+    for (const s of (setlistsRes.data || []) as { project_id: string }[]) stats[s.project_id].setlists++
+    for (const r of (rehearsalsRes.data || []) as { project_id: string }[]) stats[r.project_id].rehearsals++
+    setFolderStats(stats)
   }
 
   async function createProject() {
@@ -245,58 +262,9 @@ export default function HomePage() {
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Crea uno o únete con un código de banda</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-5">
           {projects.map((project, i) => (
-            <Link key={project.id} href={`/projects/${project.id}`}
-              className="group flex items-center p-4 gap-4 rounded-2xl transition-all duration-200 fade-in"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', animationDelay: `${i * 40}ms` }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-bright)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'}
-            >
-              {project.logo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={project.logo_url} alt="" className="w-12 h-12 rounded-2xl object-cover flex-shrink-0" />
-              ) : (
-                <div className="w-12 h-12 rounded-2xl flex-shrink-0 flex items-center justify-center" style={{ background: 'var(--bg-elevated)' }}>
-                  <Music2 size={20} style={{ color: 'var(--text-muted)' }} />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{project.name}</p>
-                {project.description && <p className="text-xs truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>{project.description}</p>}
-                {project.access_code && (
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <span className="text-xs font-mono font-bold" style={{ color: 'var(--text-muted)' }}>
-                      Código:{' '}
-                      <span style={{ color: visibleCodes.has(project.id) ? 'var(--accent)' : 'var(--text-muted)', letterSpacing: visibleCodes.has(project.id) ? '0.08em' : '0.15em' }}>
-                        {visibleCodes.has(project.id) ? project.access_code : '••••••'}
-                      </span>
-                    </span>
-                    <button
-                      onClick={e => {
-                        e.preventDefault()
-                        setVisibleCodes(prev => {
-                          const next = new Set(prev)
-                          next.has(project.id) ? next.delete(project.id) : next.add(project.id)
-                          return next
-                        })
-                      }}
-                      className="p-0.5 rounded transition-colors flex-shrink-0"
-                      style={{ color: visibleCodes.has(project.id) ? 'var(--accent)' : 'var(--text-muted)' }}
-                      title={visibleCodes.has(project.id) ? 'Ocultar código' : 'Ver código'}
-                    >
-                      {visibleCodes.has(project.id) ? <EyeOff size={11} /> : <Eye size={11} />}
-                    </button>
-                  </div>
-                )}
-              </div>
-              {project.owner_id !== user?.id && (
-                <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
-                  colaborador
-                </span>
-              )}
-              <ChevronRight size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-            </Link>
+            <BandFolder key={project.id} project={project} stats={folderStats[project.id]} collaborator={project.owner_id !== user?.id} index={i} />
           ))}
         </div>
       )}

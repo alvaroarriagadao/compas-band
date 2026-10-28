@@ -41,16 +41,13 @@ export function GastosModule({ snap, canEdit, viewerId, act }: Props) {
             <ThisMonthLine summary={summary} />
           </Card>
 
-          <SectionTitle>Por persona</SectionTitle>
-          {summary.byPerson.length === 0 ? (
-            <Card><p className="text-sm text-center py-1" style={{ color: 'var(--green)' }}>✓ Estás al día con todos</p></Card>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {summary.byPerson.map(p => (
-                <PersonCard key={p.member.id} snap={snap} me={viewer.id} person={p} canEdit={canEdit} act={act} />
-              ))}
-            </div>
-          )}
+          <SectionTitle>Deuda por persona</SectionTitle>
+          <div className="flex flex-col gap-1.5">
+            {active.filter(m => m.id !== viewer.id).map(m => {
+              const p = summary.byPerson.find(x => x.member.id === m.id) ?? { member: m, iOwe: 0, owesMe: 0, net: 0 }
+              return <PersonCard key={m.id} snap={snap} me={viewer.id} person={p} canEdit={canEdit} act={act} />
+            })}
+          </div>
         </>
       )}
 
@@ -85,109 +82,138 @@ function ThisMonthLine({ summary }: { summary: ReturnType<typeof memberSummary> 
   )
 }
 
-/** Una tarjeta por persona: total neto y, al abrir, cada gasto en una línea con sus cuotas como botones. */
+/** Una fila por persona. Al abrirla, las cuotas se agrupan por mes con un botón para pagar el mes completo. */
 function PersonCard({ snap, me, person, canEdit, act }: { snap: FinanceSnapshot; me: string; person: PersonBalance; canEdit: boolean; act: Act }) {
   const [open, setOpen] = useState(false)
   const items = useMemo(() => allShareItems(snap), [snap])
   const owesMe = items.filter(i => i.debtor.id === person.member.id && i.payer.id === me)
   const iOwe = items.filter(i => i.debtor.id === me && i.payer.id === person.member.id)
   const net = person.net
-  const nextDue = [...owesMe, ...iOwe].filter(i => !i.share.paid_at).sort((x, y) => x.share.due_date.localeCompare(y.share.due_date))[0]
+  const settled = person.owesMe === 0 && person.iOwe === 0
+  const currentKey = monthKey(todayStr())
+  const dueNow = [...owesMe, ...iOwe].filter(i => !i.share.paid_at && monthKey(i.share.due_date) <= currentKey).reduce((a, i) => a + i.share.amount, 0)
 
   return (
-    <Card style={{ padding: 0 }}>
-      <button className="w-full flex items-center gap-3 px-3.5 py-3 text-left" onClick={() => setOpen(!open)}>
-        <Avatar name={person.member.name} size={32} />
+    <div className="rounded-2xl" style={{ background: 'var(--bg-card)', border: `1px solid ${open ? 'var(--border-bright)' : 'var(--border)'}` }}>
+      <button className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left rounded-2xl" onClick={() => !settled && setOpen(!open)}
+        style={{ cursor: settled ? 'default' : 'pointer' }} aria-expanded={open}>
+        <Avatar name={person.member.name} size={30} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{person.member.name}</p>
-          <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>
-            {person.owesMe > 0 && person.iOwe > 0
-              ? <>te debe <b style={{ color: 'var(--green)' }}>{fmtCLP(person.owesMe)}</b> · le debes <b style={{ color: 'var(--red)' }}>{fmtCLP(person.iOwe)}</b></>
-              : nextDue && <>Próxima: {dateLabel(nextDue.share.due_date).split(' ').slice(0, 2).join(' ')} · {fmtCLP(nextDue.share.amount)}</>}
+          <p className="text-sm font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>{person.member.name}</p>
+          <p className="text-[11px] truncate leading-tight mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            {settled ? 'Sin deudas entre ustedes'
+              : person.owesMe > 0 && person.iOwe > 0 ? <>te debe {fmtCLP(person.owesMe)} y le debes {fmtCLP(person.iOwe)}</>
+              : dueNow > 0 ? <>Vence a {monthLabel(currentKey).split(' ')[0].toLowerCase()}: <b style={{ color: net < 0 ? 'var(--red)' : 'var(--green)' }}>{fmtCLP(dueNow)}</b></>
+              : 'Nada vencido aún'}
           </p>
         </div>
         <div className="text-right flex-shrink-0">
-          <p className="text-base font-black tabular-nums" style={{ color: net < 0 ? 'var(--red)' : 'var(--green)' }}>{net < 0 ? '−' : '+'}{fmtCLP(Math.abs(net))}</p>
-          <p className="text-[9px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>{net < 0 ? 'pagas' : 'recibes'}</p>
+          <p className="text-[15px] font-black tabular-nums leading-tight" style={{ color: settled ? 'var(--text-muted)' : net < 0 ? 'var(--red)' : 'var(--green)' }}>
+            {settled ? '$0' : `${net < 0 ? '−' : '+'}${fmtCLP(Math.abs(net))}`}
+          </p>
+          <p className="text-[9px] font-bold" style={{ color: 'var(--text-muted)' }}>{settled ? 'al día' : net < 0 ? 'pagas' : 'recibes'}</p>
         </div>
-        <span style={{ color: 'var(--text-muted)' }}>{open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</span>
+        {!settled && <span style={{ color: 'var(--text-muted)' }}>{open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</span>}
       </button>
       {open && (
-        <div className="px-3.5 pb-3.5" style={{ borderTop: '1px solid var(--border)' }}>
-          {owesMe.some(i => !i.share.paid_at) && <DebtBlock title={`${person.member.name} te debe`} items={owesMe} canEdit={canEdit} act={act} color="var(--green)" />}
-          {iOwe.some(i => !i.share.paid_at) && <DebtBlock title={`Le debes a ${person.member.name}`} items={iOwe} canEdit={canEdit} act={act} color="var(--red)" />}
+        <div className="px-3 pb-3">
+          {owesMe.some(i => !i.share.paid_at) && <MonthBlocks title={`${person.member.name} te debe`} verb="Recibí" items={owesMe} canEdit={canEdit} act={act} color="var(--green)" />}
+          {iOwe.some(i => !i.share.paid_at) && <MonthBlocks title={`Le debes a ${person.member.name}`} verb="Pagué" items={iOwe} canEdit={canEdit} act={act} color="var(--red)" />}
         </div>
       )}
-    </Card>
+    </div>
   )
 }
 
-function DebtBlock({ title, items, canEdit, act, color }: { title: string; items: ShareItem[]; canEdit: boolean; act: Act; color: string }) {
-  const [busy, setBusy] = useState(false)
-  const today = todayStr()
-  const currentKey = monthKey(today)
-  const byExpense = new Map<string, ShareItem[]>()
-  for (const i of items) byExpense.set(i.expense.id, [...(byExpense.get(i.expense.id) || []), i])
-  const groups = [...byExpense.values()]
-    .filter(xs => xs.some(i => !i.share.paid_at))
-    .sort((x, y) => x[0].expense.expense_date.localeCompare(y[0].expense.expense_date))
-  const dueNow = items.filter(i => !i.share.paid_at && monthKey(i.share.due_date) <= currentKey)
-  const dueNowTotal = dueNow.reduce((a, i) => a + i.share.amount, 0)
-  const pendingTotal = items.filter(i => !i.share.paid_at).reduce((a, i) => a + i.share.amount, 0)
+/** Cuotas de una dirección (A → B) agrupadas por mes de vencimiento. */
+function MonthBlocks({ title, verb, items, canEdit, act, color }: { title: string; verb: string; items: ShareItem[]; canEdit: boolean; act: Act; color: string }) {
+  const [showPaid, setShowPaid] = useState(false)
+  const currentKey = monthKey(todayStr())
+  const months = new Map<string, ShareItem[]>()
+  for (const i of items) { const k = monthKey(i.share.due_date); months.set(k, [...(months.get(k) || []), i]) }
+  const groups = [...months.entries()].sort(([x], [y]) => x.localeCompare(y)).map(([key, xs]) => {
+    const pending = xs.filter(i => !i.share.paid_at)
+    return { key, xs, pending, total: xs.reduce((a, i) => a + i.share.amount, 0), pendingTotal: pending.reduce((a, i) => a + i.share.amount, 0) }
+  })
+  const open = groups.filter(g => g.pending.length > 0)
+  const paid = groups.filter(g => g.pending.length === 0)
+  const pendingTotal = open.reduce((a, g) => a + g.pendingTotal, 0)
 
-  async function payDueNow() {
-    if (!window.confirm(`¿Marcar como pagadas ${dueNow.length} cuota${dueNow.length > 1 ? 's' : ''} por ${fmtCLP(dueNowTotal)}?`)) return
+  return (
+    <div className="pt-2">
+      <div className="flex items-center justify-between px-0.5 mb-1.5">
+        <p className="text-[11px] font-bold" style={{ color }}>{title}</p>
+        <p className="text-[11px] font-black tabular-nums" style={{ color: 'var(--text-primary)' }}>{fmtCLP(pendingTotal)}</p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {open.map(g => <MonthRow key={g.key} group={g} current={g.key === currentKey} overdue={g.key < currentKey} verb={verb} canEdit={canEdit} act={act} />)}
+        {paid.length > 0 && (
+          <button onClick={() => setShowPaid(!showPaid)} className="text-[11px] text-left px-1 py-0.5" style={{ color: 'var(--text-muted)' }}>
+            {showPaid ? 'Ocultar' : 'Ver'} meses pagados ({paid.length})
+          </button>
+        )}
+        {showPaid && paid.map(g => <MonthRow key={g.key} group={g} current={false} overdue={false} verb={verb} canEdit={canEdit} act={act} />)}
+      </div>
+    </div>
+  )
+}
+
+function MonthRow({ group, current, overdue, verb, canEdit, act }: {
+  group: { key: string; xs: ShareItem[]; pending: ShareItem[]; total: number; pendingTotal: number }
+  current: boolean; overdue: boolean; verb: string; canEdit: boolean; act: Act
+}) {
+  const [busy, setBusy] = useState(false)
+  const done = group.pending.length === 0
+  const [expanded, setExpanded] = useState(current || overdue)
+  const name = monthLabel(group.key).split(' ')[0]
+  const accent = done ? 'var(--green)' : overdue ? 'var(--red)' : current ? 'var(--accent)' : 'var(--text-secondary)'
+  const tag = done ? 'pagado' : overdue ? 'atrasado' : current ? 'este mes' : null
+
+  async function payMonth() {
     setBusy(true)
-    await act('shares.pay', { share_ids: dueNow.map(i => i.share.id) })
+    await act('shares.pay', { share_ids: group.pending.map(i => i.share.id) })
     setBusy(false)
   }
 
   return (
-    <div className="pt-3">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color }}>{title}</p>
-        <p className="text-xs font-black tabular-nums" style={{ color: 'var(--text-primary)' }}>{fmtCLP(pendingTotal)}</p>
+    <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-elevated)', borderLeft: `3px solid ${accent}` }}>
+      <div className="flex items-center gap-2 pl-2.5 pr-1.5 py-1.5">
+        <button onClick={() => setExpanded(e => !e)} className="flex-1 min-w-0 flex items-center gap-1.5 text-left" aria-expanded={expanded}>
+          <span className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>{name}</span>
+          {tag && <span className="text-[10px] font-semibold" style={{ color: accent }}>{tag}</span>}
+          {!expanded && <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{group.xs.length} cuota{group.xs.length > 1 ? 's' : ''}</span>}
+          <span style={{ color: 'var(--text-muted)' }}>{expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}</span>
+        </button>
+        <span className="text-[13px] font-black tabular-nums" style={{ color: done ? 'var(--green)' : 'var(--text-primary)', textDecoration: done ? 'line-through' : 'none' }}>
+          {fmtCLP(done ? group.total : group.pendingTotal)}
+        </span>
+        {canEdit && !done && (
+          <button onClick={payMonth} disabled={busy}
+            className="ml-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 transition-transform active:scale-95"
+            style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--green)', border: '1px solid rgba(16,185,129,0.35)', opacity: busy ? 0.5 : 1 }}>
+            <Check size={11} /> {verb} {name.toLowerCase()}
+          </button>
+        )}
       </div>
-      <div className="flex flex-col gap-2">
-        {groups.map(xs => {
-          const e = xs[0].expense
-          const left = xs.filter(i => !i.share.paid_at).reduce((a, i) => a + i.share.amount, 0)
+      {expanded && <div className="px-2.5 pb-1.5">
+        {group.xs.sort((a, b) => a.expense.description.localeCompare(b.expense.description)).map(i => {
+          const paid = !!i.share.paid_at
           return (
-            <div key={e.id} className="rounded-xl px-3 py-2" style={{ background: 'var(--bg-elevated)' }}>
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{e.description}</p>
-                <p className="text-xs font-bold tabular-nums flex-shrink-0" style={{ color: 'var(--text-secondary)' }}>{fmtCLP(left)}</p>
-              </div>
-              <div className="flex flex-wrap gap-1 mt-1.5">
-                {xs.sort((x, y) => x.share.installment_no - y.share.installment_no).map(i => {
-                  const paid = !!i.share.paid_at
-                  const overdue = !paid && i.share.due_date < today
-                  return (
-                    <button key={i.share.id} disabled={!canEdit}
-                      onClick={() => act('share.toggle', { share_id: i.share.id, paid: !paid })}
-                      title={paid ? 'Pagada · tocar para desmarcar' : 'Tocar para marcar pagada'}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold tabular-nums transition-transform active:scale-95"
-                      style={{
-                        background: paid ? 'rgba(16,185,129,0.15)' : overdue ? 'rgba(239,68,68,0.12)' : 'var(--bg-card)',
-                        border: `1px solid ${paid ? 'rgba(16,185,129,0.35)' : overdue ? 'rgba(239,68,68,0.35)' : 'var(--border)'}`,
-                        color: paid ? 'var(--green)' : overdue ? 'var(--red)' : 'var(--text-secondary)',
-                        textDecoration: paid ? 'line-through' : 'none',
-                      }}>
-                      {paid ? <Check size={10} /> : <span className="w-2.5 h-2.5 rounded-[3px]" style={{ border: '1.5px solid currentColor' }} />}
-                      {monthLabel(monthKey(i.share.due_date), true).split(' ')[0]} {fmtCLP(i.share.amount)}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+            <button key={i.share.id} disabled={!canEdit} onClick={() => act('share.toggle', { share_id: i.share.id, paid: !paid })}
+              className="w-full flex items-center gap-2 py-[3px] text-left" title={paid ? 'Pagada · tocar para desmarcar' : 'Tocar para marcar solo esta cuota'}>
+              <span className="w-3.5 h-3.5 rounded-[4px] flex items-center justify-center flex-shrink-0"
+                style={{ border: `1.5px solid ${paid ? 'var(--green)' : 'var(--border-bright)'}`, background: paid ? 'var(--green)' : 'transparent' }}>
+                {paid && <Check size={9} color="#000" strokeWidth={3} />}
+              </span>
+              <span className="flex-1 min-w-0 text-[12px] truncate" style={{ color: paid ? 'var(--text-muted)' : 'var(--text-secondary)', textDecoration: paid ? 'line-through' : 'none' }}>
+                {i.expense.description}
+                {i.expense.installments > 1 && <span style={{ color: 'var(--text-muted)' }}> {i.share.installment_no}/{i.expense.installments}</span>}
+              </span>
+              <span className="text-[12px] tabular-nums flex-shrink-0" style={{ color: paid ? 'var(--text-muted)' : 'var(--text-secondary)' }}>{fmtCLP(i.share.amount)}</span>
+            </button>
           )
         })}
-      </div>
-      {canEdit && dueNow.length > 1 && (
-        <Btn small variant="success" className="w-full mt-2" disabled={busy} onClick={payDueNow}>
-          <Check size={12} /> Marcar todo lo vencido ({fmtCLP(dueNowTotal)})
-        </Btn>
-      )}
+      </div>}
     </div>
   )
 }
